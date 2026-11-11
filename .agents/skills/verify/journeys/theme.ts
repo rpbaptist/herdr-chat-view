@@ -1,4 +1,4 @@
-// Feature: theme. The Auto / Dark / Light control in the top bar, and [theme] mode in config.toml.
+// Feature: theme. The Auto / Dark / Light control in the settings popover (the gear), and [theme] mode in config.toml.
 // Proves: click or key -> POST /api/config -> config.toml text (other content kept) -> settings and theme
 // events -> computed colors of every open page; a hand edit of the file; and a reload that keeps the choice.
 // The herdr config and the terminal colors file are fixtures in the run directory: herdr colors first, terminal colors second.
@@ -25,7 +25,16 @@ export default async function (j: Journey) {
   const want = { auto: THEMES.gruvbox.panel_bg, dark: THEMES.gruvbox.panel_bg, light: THEMES["gruvbox-light"].panel_bg };
   step(`herdr theme gruvbox; expected backgrounds: ${JSON.stringify(want)}`);
 
-  const pressed = (p = page) => p.evaluate(() => [...document.querySelectorAll("#themesw button")].find((b) => b.getAttribute("aria-pressed") === "true")?.textContent);
+  // The control is in the settings popover: open it when it is closed (after a reload, or on the second page).
+  const openSettings = (p = page) => p.evaluate(() => document.getElementById("settings")!.hidden && document.getElementById("gear")!.click());
+  const pressed = async (p = page) => {
+    await openSettings(p);
+    return p.evaluate(() => [...document.querySelectorAll("#settings .themesw button")].find((b) => b.getAttribute("aria-pressed") === "true")?.textContent);
+  };
+  const choose = async (mode: string) => {
+    await openSettings();
+    await page.locator(`#settings [data-id="theme:${mode}"]`).click();
+  };
   const bg = (p = page) => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const waitMode = (what: string, label: string, color: string | null, p = page) =>
     until(what, async () => (await pressed(p)) === label && (color === null || (await bg(p)) === rgb(color)));
@@ -49,7 +58,7 @@ export default async function (j: Journey) {
     step(`auto: background ${await bg()} is the panel_bg of the herdr theme`);
     await j.shot("auto");
 
-    await page.locator('#themesw [data-mode="light"]').click();
+    await choose("light");
     await waitMode("Light is marked and light colors apply", "Light", want.light);
     await waitMode("the second page follows", "Light", want.light, second);
     step(`light: background ${await bg()}, the second page too`);
@@ -59,19 +68,20 @@ export default async function (j: Journey) {
     await j.shot("light");
     await second.screenshot({ path: `${j.out}/second-page-light.png` });
 
-    await page.locator('#themesw [data-mode="dark"]').click();
+    await choose("dark");
     await waitMode("Dark is marked and dark colors apply", "Dark", want.dark);
     if (fileText() !== `${seed}\n[theme]\nmode = "dark"\n`) throw new Error(`config.toml after Dark:\n${fileText()}`);
     step(`dark: background ${await bg()}; the value is replaced in place`);
     await j.shot("dark");
 
-    await page.locator('#themesw [data-mode="auto"]').click();
+    await choose("auto");
     await waitMode("Auto again", "Auto", want.auto);
     if (!fileText().endsWith('[theme]\nmode = "auto"\n')) throw new Error(`config.toml after Auto:\n${fileText()}`);
 
-    await page.locator('#themesw [data-mode="dark"]').focus();
+    await openSettings();
+    await page.locator('#settings [data-id="theme:dark"]').focus();
     await page.keyboard.press("Tab");
-    if ((await page.evaluate(() => document.activeElement?.getAttribute("data-mode"))) !== "light") throw new Error("Tab does not reach the Light button");
+    if ((await page.evaluate(() => document.activeElement?.getAttribute("data-id"))) !== "theme:light") throw new Error("Tab does not reach the Light button");
     await page.keyboard.press("Enter");
     await waitMode("Light by keyboard", "Light", want.light);
     step("keyboard: Tab to Light and Enter chose it");
@@ -89,7 +99,7 @@ export default async function (j: Journey) {
     step("reload keeps Dark");
     if (!fileText().includes('mode = "dark" # by hand')) throw new Error("the page changed the file");
 
-    await page.locator('#themesw [data-mode="light"]').click();
+    await choose("light");
     await waitMode("Light again", "Light", want.light);
     if (!fileText().includes('mode = "light" # by hand')) throw new Error(`the comment after the value is lost:\n${fileText()}`);
     await page.reload();

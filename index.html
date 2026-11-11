@@ -167,7 +167,7 @@ textarea::placeholder { color: var(--muted); }
 #status .builtin.working { color: var(--working); } #status .builtin.blocked { color: var(--blocked); }
 #status .builtin.done { color: var(--done); } #status .builtin.idle { color: var(--idle); }
 #status:empty { display: none; }
-/* The gear opens the status bar settings popover, which edits [status] of config.toml. */
+/* The gear opens the settings popover, which edits [theme] mode and [status] of config.toml. */
 .statusrow { position: relative; display: flex; align-items: flex-start; gap: 6px; }
 .statusrow #status { flex: 1; min-width: 0; }
 #gear { margin: 10px 2px 0 auto; padding: 4px; border-radius: 7px; color: var(--muted); display: inline-flex; }
@@ -213,9 +213,6 @@ textarea::placeholder { color: var(--muted); }
     <span class="dot" id="hdot"></span>
     <span class="chip" id="hchip">No agent</span>
     <span class="sp"></span>
-    <div class="themesw" id="themesw" role="group" aria-label="Theme">
-      <button data-mode="auto" title="Terminal theme">Auto</button><button data-mode="dark" title="Dark theme">Dark</button><button data-mode="light" title="Light theme">Light</button>
-    </div>
     <button class="iconbtn" id="term" title="Show the terminal">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>Terminal
     </button>
@@ -246,8 +243,8 @@ textarea::placeholder { color: var(--muted); }
       </div>
       <div class="statusrow">
         <div id="status"></div>
-        <button id="gear" title="Status bar settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
-        <div id="settings" role="dialog" aria-label="Status bar settings" tabindex="-1" hidden></div>
+        <button id="gear" title="Settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <div id="settings" role="dialog" aria-label="Settings" tabindex="-1" hidden></div>
       </div>
       <div id="err"></div>
     </div>
@@ -622,19 +619,17 @@ function applySettings(s) {
   $("send").title = `Send (${sendKey === "enter" ? "Enter" : "Ctrl+Enter"})`;
   voice = s.voice;
   renderVoice();
-  for (const b of $("themesw").children) b.setAttribute("aria-pressed", String(b.dataset.mode === s.themeMode));
+  themeMode = s.themeMode;
   cfg = { status: s.status, error: s.error };
   if (!$("settings").hidden) renderSettings();
 }
-$("themesw").addEventListener("click", (e) => {
-  const mode = e.target.closest("button")?.dataset.mode;
-  if (mode) api("/api/config", { table: "theme", key: "mode", value: mode }).then(() => showErr(), showErr);
-});
-// Status bar settings popover. It edits [status] of config.toml: one key per
-// POST /api/config, at once; the status bar is the live preview. cfg holds the
+// Settings popover. It edits [theme] mode and [status] of config.toml: one key
+// per POST /api/config, at once; the page and the status bar are the live preview. cfg holds the
 // strings as written, from the server. typed and errors keep the user's text
 // and the server's refusal per field ("hide:2", "items:new"), so a bad value
 // stays in its field.
+let themeMode = "auto";
+const THEMES = [["auto", "Auto", "Terminal theme"], ["dark", "Dark", "Dark theme"], ["light", "Light", "Light theme"]];
 let cfg = { status: { mode: true, hide: [], items: ["*"], builtins: [] }, error: null };
 let screenChips = [];
 let typed = {}, errors = {}, focusNext = null, added = null;
@@ -655,9 +650,11 @@ function renderSettings() {
   const missing = [...st.builtins, "*"].filter((b) => !st.items.includes(b));
   const hide = st.hide.map((v, i) => `<li${added === i ? ' class="added"' : ""}>${field(`hide:${i}`, v, `Hide regex ${i + 1}`)}${ibtn("remove", "hide", i, "Remove")}</li>${ferr(`hide:${i}`)}`).join("");
   box.innerHTML =
-    `<div class="ph"><span class="pt">Status bar</span><button class="ib" data-act="close" data-id="close" title="Close (Esc)" aria-label="Close">${PICON.remove}</button></div>` +
-    (error ? `<div class="perr" role="alert">The status bar uses the defaults until you fix the file by hand. ${esc(error)}</div>` :
-    `<label class="check"><input type="checkbox" data-act="mode" data-id="mode"${st.mode ? " checked" : ""}> Show the mode pill</label>${ferr("mode")}` +
+    `<div class="ph"><span class="pt">Settings</span><button class="ib" data-act="close" data-id="close" title="Close (Esc)" aria-label="Close">${PICON.remove}</button></div>` +
+    (error ? `<div class="perr" role="alert">The page uses the defaults until you fix the file by hand. ${esc(error)}</div>` :
+    `<h3>Theme</h3><div class="themesw" role="group" aria-label="Theme">${THEMES.map(([m, label, title]) =>
+      `<button data-act="theme" data-v="${m}" data-id="theme:${m}" title="${title}" aria-pressed="${m === themeMode}">${label}</button>`).join("")}</div>${ferr("theme")}` +
+    `<h3>Status bar</h3><label class="check"><input type="checkbox" data-act="mode" data-id="mode"${st.mode ? " checked" : ""}> Show the mode pill</label>${ferr("mode")}` +
     `<h3>Chips, in order</h3><ol>${items || '<li class="hint">No chips show.</li>'}</ol>` +
     (missing.length ? `<div class="add">${missing.map((b) => `<button class="tb" data-act="add-name" data-v="${esc(b)}" data-id="add:${esc(b)}" title="Add ${b === "*" ? "the other screen chips" : `the built-in item ${esc(b)}`}">+ ${esc(b)}</button>`).join("")}</div>` : "") +
     `<div class="new">${field("items:new", "", "New item regex", "/regex/ of chips to place here")}<button class="tb" data-act="add" data-key="items" data-id="items:add">Add</button></div>${ferr("items:new")}` +
@@ -699,6 +696,18 @@ async function writeStatus(key, value, f, focus) {
   }
   renderSettings();
 }
+async function writeTheme(mode) {
+  if (cfg.error) return;
+  try {
+    await api("/api/config", { table: "theme", key: "mode", value: mode });
+    themeMode = mode;
+    delete errors.theme;
+  } catch (e) {
+    errors.theme = e.message || String(e);
+  }
+  focusNext = `theme:${mode}`;
+  renderSettings();
+}
 function commitField(el) {
   const [key, at] = el.dataset.f.split(":");
   const list = [...cfg.status[key]];
@@ -723,6 +732,7 @@ $("settings").addEventListener("click", (e) => {
   const { act, key } = b.dataset, i = Number(b.dataset.i);
   const list = key ? [...cfg.status[key]] : [];
   if (act === "close") closeSettings();
+  else if (act === "theme") writeTheme(b.dataset.v);
   else if (act === "mode") writeStatus("mode", b.checked, "mode", "mode");
   else if (act === "add-name") writeStatus("items", [...cfg.status.items, b.dataset.v], "items:new", "items:new");
   else if (act === "add") commitField($("settings").querySelector(`[data-f="${key}:new"]`));
@@ -754,7 +764,7 @@ function openSettings() {
   typed = {}; errors = {}; added = null;
   $("settings").hidden = false;
   $("gear").setAttribute("aria-expanded", "true");
-  focusNext = cfg.error ? "close" : "mode";
+  focusNext = cfg.error ? "close" : `theme:${themeMode}`;
   renderSettings();
 }
 function closeSettings() {
