@@ -81,7 +81,8 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | File | Purpose |
 | --- | --- |
 | `herdr-chat.ts` | `toggle` and `close` actions, and the local chat server |
-| `transcripts.ts` | Claude Code and Codex transcript parsers |
+| `transcripts.ts` | Claude Code and Codex transcript and skill-list parsers |
+| `agents.ts` | One descriptor for each agent kind: parsers, transcript lookup, skill trigger, built-in commands |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
 | `theme.ts` | Omarchy theme colors as CSS variables |
