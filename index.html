@@ -38,7 +38,6 @@ main { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
 
 /* top bar */
 header { display: flex; align-items: center; gap: 10px; padding: 10px 18px; min-width: 0; }
-header .title { font-weight: 550; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 header .chip { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 header .sp { flex: 1; }
 .iconbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--soft); padding: 6px 10px; border-radius: 8px; }
@@ -153,8 +152,7 @@ textarea::placeholder { color: var(--muted); }
 <main>
   <header>
     <span class="dot" id="hdot"></span>
-    <span class="title" id="htitle">No agent</span>
-    <span class="chip" id="hchip"></span>
+    <span class="chip" id="hchip">No agent</span>
     <span class="sp"></span>
     <button class="iconbtn" id="term" title="Show the terminal">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>Terminal
@@ -328,8 +326,7 @@ function renderAgent() {
   const cur = agents.find((a) => a.pane_id === pane);
   const status = cur ? cur.agent_status : "";
   $("hdot").className = `dot ${status}`;
-  $("htitle").textContent = cur ? cur.title || cur.agent : "No agent";
-  $("hchip").textContent = cur ? status : "";
+  $("hchip").textContent = cur ? status : "No agent";
   document.title = cur ? cur.title || cur.agent : "herdr chat";
   const stick = nearBottom();
   $("working").classList.toggle("on", status === "working");
