@@ -35,6 +35,7 @@ Each feature file starts with an H1 title and one paragraph about the behavior t
 - [Toggle and close](./toggle.md) covers the toggle action that switches between the terminal and the chat, and the close action.
 - [Draft handoff](./draft-handoff.md) covers how a draft moves between the composer and Claude's input box when you switch views.
 - [Status bar config](./status-bar.md) covers `config.toml`: hidden, moved and built-in chips, `mode = false`, config errors, and live reload. Journey: `journeys/status-bar.ts`. Status: proven.
+- [Status bar settings popover](./status-settings.md) covers the gear next to the status bar: the mode pill, items, hide regexes, the quick hide of a chip, refused values, a config error, and the keys and focus of the popover. Journey: `journeys/status-settings.ts`. Status: proven.
 - [Agent controls and status](./agent-controls.md) covers the mode pill (Shift+Tab), the footer status segments, interrupt, and the blocked-answer panel.
 - [Auto-complete](./autocomplete.md) covers the `/` and `$` popup for skills and built-in commands. Journey: `journeys/autocomplete.ts`. Status: proven.
 - [Send key](./send-key.md) covers `[input] send_key` in `config.toml`: Enter or Ctrl+Enter sends, the tooltip, the popup keys, config errors, and live reload. Journey: `journeys/send-key.ts`. Status: proven.

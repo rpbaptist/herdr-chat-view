@@ -77,6 +77,18 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
   branch of the agent's working directory; no chip outside a git repository or
   on a detached HEAD). The server runs git only when `items` lists `branch`.
 
+- The gear at the right of the status bar opens the **settings popover**. It
+  edits `[status]` in the same file: the mode pill, the `items` (add a built-in
+  item, `"*"` or a regex; move an item up or down; remove it) and the `hide`
+  regexes (add, edit, remove). A chip button under "Hide a chip that shows now"
+  adds a `hide` regex for that chip: its whole text, escaped, with each number
+  as `\d+`, so `42% context` stays hidden at 43%. Each change writes the file at
+  once with the same text edit as the theme control, and the status bar shows
+  it. The page refuses a value that gives a config error (for example a bad
+  regex), shows the error under the field and keeps your text. When the file
+  already has an error, the popover shows it and does not write. Esc or a click
+  outside closes the popover, and the focus goes back to the message box.
+
 - `input.send_key` (default `"enter"`) sets the key that sends the message. With
   `"ctrl-enter"`, Enter and Shift+Enter add a new line, and Ctrl+Enter or
   Cmd+Enter sends. The send button tooltip shows the active key. The

@@ -9,6 +9,7 @@
 // - Enter appends a user entry and an "echo: <text>" assistant entry to the transcript.
 // - Typed text shows in the input box, so herdr-chat's draft handoff can read it.
 // - Shift+Tab cycles the mode line. Esc clears the input box. Ctrl+C exits.
+// - The message "context <n>" sets the footer chip to "<n>% context" (42 at the start).
 import { appendFileSync } from "node:fs";
 
 const [transcript, session] = process.argv.slice(2);
@@ -37,11 +38,12 @@ const MODES = ["", "⏵⏵ accept edits on (shift+tab to cycle)", "⏸ plan mode
 let mode = 0;
 let input = "";
 let last = "(none)";
+let context = 42;
 
 const rule = "─".repeat(60);
 function draw() {
   const box = input ? `❯ ${input}` : "❯ \x1b[2mType a message\x1b[0m";
-  const footer = [MODES[mode], "fixture-agent · verify  \x1b[33m⎇ main\x1b[0m  42% context"].filter(Boolean).join("\n  ");
+  const footer = [MODES[mode], `fixture-agent · verify  \x1b[33m⎇ main\x1b[0m  ${context}% context`].filter(Boolean).join("\n  ");
   process.stdout.write(`\x1b]0;fixture-agent\x07\x1b[2J\x1b[Hfixture-agent session ${session}\nlast: ${last}\nmode: ${mode}\n\n${rule}\n${box}\n${rule}\n  ${footer}\n`);
 }
 
@@ -52,6 +54,8 @@ function submit() {
     entry("user", text);
     entry("assistant", `echo: ${text}`);
     last = text;
+    const m = /^context (\d+)$/.exec(text);
+    if (m) context = Number(m[1]);
   }
 }
 
