@@ -45,6 +45,14 @@ export default async function (j: Journey) {
     step(`error cleared; status chip in the herdr state color ${color}`);
     await j.shot("fixed");
 
+    const branch = Bun.spawnSync(["git", "-C", run.CHECKOUT, "branch", "--show-current"]).stdout.toString().trim();
+    if (!branch) throw new Error(`${run.CHECKOUT} has no current branch; run the journey from a checked-out branch`);
+    write('[status]\nitems = ["branch"]\n');
+    await waitChips([branch]);
+    if (!(await page.locator("#status .seg.builtin.branch").count())) throw new Error("branch chip is not a built-in item");
+    step(`branch chip shows the git branch of the agent's directory: ${branch}`);
+    await j.shot("branch");
+
     if (!(await page.evaluate(() => (window as any).__noReload))) throw new Error("the page reloaded");
     step("all changes showed with no page reload");
   } finally {
