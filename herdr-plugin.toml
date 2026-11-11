@@ -1,0 +1,27 @@
+id = "rpbaptist.herdr-chat-view"
+name = "Chat view"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+description = "Chat view on agent sessions, drawn with pixel. Toggle between the terminal and the chat."
+platforms = ["linux", "macos"]
+
+# Run from the agent pane or its chat pane. The first run opens the chat in a
+# split; later runs zoom the chat or the terminal.
+[[actions]]
+id = "toggle"
+title = "Chat view: toggle terminal / chat"
+contexts = ["pane"]
+command = ["bun", "herdr-chat.ts", "toggle"]
+
+[[actions]]
+id = "close"
+title = "Chat view: close"
+contexts = ["pane"]
+command = ["bun", "herdr-chat.ts", "close"]
+
+# Opened by the toggle action with HERDR_CHAT_URL set.
+[[panes]]
+id = "chat"
+title = "chat"
+placement = "split"
+command = ["bash", "chat-pane.sh"]
