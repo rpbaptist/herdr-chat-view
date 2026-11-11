@@ -170,10 +170,10 @@ export default async function (j: Journey) {
     await expectState("file fixed by hand", ["⎇ main", "fixture-agent · verify"], final);
 
     for (const theme of ["dark", "light"] as const) {
-      await page.locator(`#themesw [data-mode="${theme}"]`).click();
-      await until(`${theme} theme`, async () => (await page.locator(`#themesw [data-mode="${theme}"]`).getAttribute("aria-pressed")) === "true");
       await page.locator("#gear").click();
       await until("popover open", () => pop.isVisible());
+      await at(`theme:${theme}`).click();
+      await until(`${theme} theme`, async () => (await at(`theme:${theme}`).getAttribute("aria-pressed")) === "true");
       await pop.getByRole("button", { name: "Hide fixture-agent · verify" }).focus();
       await j.shot(`popover-${theme}`);
       await page.keyboard.press("Escape");

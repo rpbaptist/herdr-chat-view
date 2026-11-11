@@ -1,6 +1,6 @@
 # Theme
 
-The Auto / Dark / Light control in the top bar, next to "Terminal", and `[theme] mode` in `config.toml`. The choice is one value for all chat panes. **Auto** shows the herdr theme that herdr shows (`name`, or the `dark_name` or `light_name` theme with `auto_switch`). **Dark** and **Light** show the `dark_name` and `light_name` themes. A color that the herdr theme does not give (the `terminal` theme, an ANSI name, and the ANSI colors 0 to 15) comes from the terminal colors file that the chat pane writes, else from the built-in colors. A click writes the value to `config.toml` through `POST /api/config`, and every open page shows it at once. A hand edit of the file shows in a few seconds, with no reload.
+The Auto / Dark / Light control at the top of the settings popover (the gear at the right of the status bar), and `[theme] mode` in `config.toml`. The choice is one value for all chat panes. **Auto** shows the herdr theme that herdr shows (`name`, or the `dark_name` or `light_name` theme with `auto_switch`). **Dark** and **Light** show the `dark_name` and `light_name` themes. A color that the herdr theme does not give (the `terminal` theme, an ANSI name, and the ANSI colors 0 to 15) comes from the terminal colors file that the chat pane writes, else from the built-in colors. A click writes the value to `config.toml` through `POST /api/config`, and every open page shows it at once. A hand edit of the file shows in a few seconds, with no reload.
 
 ## Sub-features
 
@@ -17,7 +17,7 @@ The Auto / Dark / Light control in the top bar, next to "Terminal", and `[theme]
 
 ## How to get to it (user POV)
 
-- Click Auto, Dark or Light at the top right of the chat page. Or write `[theme]` with `mode = "light"` in `herdr plugin config-dir rpbaptist.herdr-chat-view`.
+- Click the gear, then Auto, Dark or Light. Or write `[theme]` with `mode = "light"` in `herdr plugin config-dir rpbaptist.herdr-chat-view`.
 
 ## Driving it with page.ts
 

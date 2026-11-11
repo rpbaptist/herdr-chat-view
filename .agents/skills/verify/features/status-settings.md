@@ -1,6 +1,6 @@
-# Status bar settings popover
+# Settings popover
 
-The gear at the right of the status bar, under the composer, opens a popover that edits `[status]` in `config.toml`. It shows or hides the mode pill, sets the `items` (built-in items, `"*"` and regexes: add, move up or down, remove) and the `hide` regexes (add, edit, remove). A chip button hides a chip that shows now: it adds the chip text as an anchored, escaped regex with each number as `\d+`, and focuses it for an edit. Each change is one `POST /api/config` and writes the file at once; the status bar is the live preview. The server refuses a value that gives a config error. The popover then shows the error under the field and keeps the text. When the file already has an error, the popover shows only the error.
+The gear at the right of the status bar, under the composer, opens a popover that edits `[status]` in `config.toml`. Its Theme control, at the top, is the [theme](./theme.md) feature. It shows or hides the mode pill, sets the `items` (built-in items, `"*"` and regexes: add, move up or down, remove) and the `hide` regexes (add, edit, remove). A chip button hides a chip that shows now: it adds the chip text as an anchored, escaped regex with each number as `\d+`, and focuses it for an edit. Each change is one `POST /api/config` and writes the file at once; the status bar is the live preview. The server refuses a value that gives a config error. The popover then shows the error under the field and keeps the text. When the file already has an error, the popover shows only the error.
 
 ## Sub-features
 
