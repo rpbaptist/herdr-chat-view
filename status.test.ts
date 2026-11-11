@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { statusBar, type StatusAgent } from "./status.ts";
+import { statusBar, usesBranch, type StatusAgent } from "./status.ts";
 
 const rule = (n = 40) => "─".repeat(n);
 const screen = (...lines: string[]) => lines.join("\n");
@@ -97,6 +97,19 @@ describe("statusBar built-in items", () => {
       { type: "builtin", name: "cwd", text: "~/code/app" },
       { type: "builtin", name: "status", text: "idle" },
     ]);
+  });
+
+  test("shows the branch from the agent data, and no chip when it is empty", () => {
+    expect(texts(claude, items('"branch"'), { ...agent, branch: "feat/x" })).toEqual(["feat/x"]);
+    expect(texts(claude, items('"branch"'), { ...agent, branch: "" })).toEqual([]);
+    expect(texts(claude, items('"branch"'))).toEqual([]);
+  });
+
+  test("usesBranch is true only when items lists branch", () => {
+    expect(usesBranch(null)).toBe(false);
+    expect(usesBranch(items('"kind", "*"'))).toBe(false);
+    expect(usesBranch(items('"kind", "branch"'))).toBe(true);
+    expect(usesBranch("[status]\nitems = [\"nope\"]")).toBe(false);
   });
 
   test("uses the foreground cwd before the cwd", () => {

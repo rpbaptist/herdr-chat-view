@@ -59,8 +59,10 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
 - `items` (default `["*"]`) sets the order. A regex places all the screen
   chips that match and are not placed yet. `"*"` places all the other screen
   chips. A list without `"*"` shows only the listed items. The built-in items
-  are `kind` (agent kind), `cwd` (the working directory, with `~` for home)
-  and `status` (the herdr agent status, in the state color).
+  are `kind` (agent kind), `cwd` (the working directory, with `~` for home),
+  `status` (the herdr agent status, in the state color) and `branch` (the git
+  branch of the agent's working directory; no chip outside a git repository or
+  on a detached HEAD). The server runs git only when `items` lists `branch`.
 
 The server reads the file every 2 seconds, so open chat pages show a change
 with no restart. If the file has an error, the status bar uses the defaults
@@ -84,6 +86,7 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | `transcripts.ts` | Claude Code and Codex transcript and skill-list parsers |
 | `agents.ts` | One descriptor for each agent kind: parsers, transcript lookup, skill trigger, built-in commands |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |
+| `branches.ts` | The git branch of a working directory, cached |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
 | `theme.ts` | Omarchy theme colors as CSS variables |
 | `index.html` | The chat page |

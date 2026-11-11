@@ -1,7 +1,7 @@
 // The status bar model: the footer of the agent screen, filtered and ordered by config.toml.
 import { footer, type Mode, type ScreenChip } from "./screen.ts";
 
-export type StatusAgent = { agent: string; agent_status: string; cwd?: string; foreground_cwd?: string };
+export type StatusAgent = { agent: string; agent_status: string; cwd?: string; foreground_cwd?: string; branch?: string };
 // A chip from herdr agent data, not from the screen.
 export type BuiltinChip = { type: "builtin"; name: Builtin; text: string };
 export type Chip = ScreenChip | BuiltinChip;
@@ -11,6 +11,7 @@ const BUILTINS = {
   kind: (a: StatusAgent) => a.agent,
   cwd: (a: StatusAgent, home: string) => tilde(a.foreground_cwd || a.cwd || "", home),
   status: (a: StatusAgent) => a.agent_status,
+  branch: (a: StatusAgent) => a.branch ?? "",
 };
 type Builtin = keyof typeof BUILTINS;
 const isBuiltin = (s: string): s is Builtin => Object.hasOwn(BUILTINS, s);
@@ -41,6 +42,10 @@ export function statusBar(screen: string, agent: StatusAgent | null, configText:
   }
   return { mode: config.mode ? mode : null, chips: out, error };
 }
+
+// True when the config lists the branch item, so the server runs git only then.
+export const usesBranch = (configText: string | null) =>
+  loadConfig(configText).config.items.some((i) => typeof i === "object" && "builtin" in i && i.builtin === "branch");
 
 // The last config text and its result: the server resolves the status bar every second.
 let cache: { text: string | null; result: { config: Config; error: string | null } } | null = null;

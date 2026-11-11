@@ -7,8 +7,9 @@ import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { inputText } from "./screen.ts";
-import { statusBar } from "./status.ts";
+import { statusBar, usesBranch } from "./status.ts";
 import { themeCss } from "./theme.ts";
+import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
 import { agentOf, transcriptPath } from "./agents.ts";
 import { addSkills, type Item, type Skill } from "./transcripts.ts";
@@ -344,6 +345,7 @@ async function serve() {
     if (addSkills(c.skills, agent.parseSkills(lines))) c.send("completions", completions(a.agent, c.skills.values()));
   }
 
+  const branches = branchCache();
   setInterval(pollAgents, 1000);
   setInterval(() => {
     for (const c of clients) pump(c).catch((e) => console.error("pump:", e));
@@ -359,7 +361,10 @@ async function serve() {
       herdr(["agent", "read", c.pane, "--source", "visible", "--format", "ansi"])
         .then((screen) => {
           // A config change gives a new model here, so the page gets it on the next tick.
-          const json = JSON.stringify(statusBar(String(screen), agentFor(c.pane) ?? null, config, homedir()));
+          const a = agentFor(c.pane);
+          const cwd = a?.foreground_cwd || a?.cwd;
+          const withBranch = a && cwd && usesBranch(config) ? { ...a, branch: branches.get(cwd) } : a;
+          const json = JSON.stringify(statusBar(String(screen), withBranch ?? null, config, homedir()));
           if (json === c.status) return;
           c.status = json;
           c.send("status", JSON.parse(json));
