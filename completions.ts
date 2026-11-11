@@ -1,6 +1,6 @@
 // Auto-complete entries for the chat input: the agent's skills (from its
 // transcript) and its built-in slash commands (not in the transcript).
-import type { Skill } from "./transcripts.ts";
+import { addSkills, type Skill } from "./transcripts.ts";
 
 export type Completion = { name: string; description: string; trigger: "/" | "$"; source: "skill" | "builtin" };
 
@@ -80,11 +80,8 @@ export function completions(kind: string | null | undefined, skills: Iterable<Sk
   if (!trigger) return [];
   const merged = new Map<string, Completion>();
   for (const b of builtins[kind!] ?? []) merged.set(`/${b.name}`, { ...b, trigger: "/", source: "builtin" });
-  for (const s of skills) {
-    const key = trigger + s.name;
-    const prev = merged.get(key);
-    if (prev?.source === "skill" && !s.description) continue;
-    merged.set(key, { name: s.name, description: s.description, trigger, source: "skill" });
-  }
+  const unique = new Map<string, Skill>();
+  addSkills(unique, skills);
+  for (const s of unique.values()) merged.set(trigger + s.name, { ...s, trigger, source: "skill" });
   return [...merged.values()];
 }

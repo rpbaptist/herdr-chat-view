@@ -123,6 +123,19 @@ export const parsers: Record<string, Parser> = { claude: parseClaude, codex: par
 export type Skill = { name: string; description: string };
 type SkillParser = (lines: any[]) => Skill[];
 
+// Add skills to a list by name. A skill with no description does not replace
+// one that has a description. Return true when the list changed.
+export function addSkills(known: Map<string, Skill>, found: Iterable<Skill>): boolean {
+  let changed = false;
+  for (const s of found) {
+    const prev = known.get(s.name);
+    if (prev && (prev.description === s.description || !s.description)) continue;
+    known.set(s.name, s);
+    changed = true;
+  }
+  return changed;
+}
+
 // "- name: description". Plugin names have a colon too, but no space after it.
 const SKILL_LINE = /^- (\S+?)(?::\s+(.*?))?\s*$/;
 

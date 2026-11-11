@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { footer, inputText } from "./screen.ts";
 import { themeCss } from "./theme.ts";
 import { completions } from "./completions.ts";
-import { parsers, skillParsers, transcriptPath, type Item, type Skill } from "./transcripts.ts";
+import { addSkills, parsers, skillParsers, transcriptPath, type Item, type Skill } from "./transcripts.ts";
 
 const PLUGIN_ID = "rpbaptist.herdr-chat-view";
 const IDLE_EXIT_MS = 10 * 60_000;
@@ -279,18 +279,6 @@ async function serve() {
     } catch (e) {
       console.error("agent list:", (e as Error).message);
     }
-  }
-
-  // Add skills by name. Return true when the list changed.
-  function addSkills(known: Map<string, Skill>, found: Skill[]): boolean {
-    let changed = false;
-    for (const s of found) {
-      const prev = known.get(s.name);
-      if (prev && (prev.description === s.description || !s.description)) continue;
-      known.set(s.name, s);
-      changed = true;
-    }
-    return changed;
   }
 
   // Send new transcript lines to a client. Reset when the agent changes session.
