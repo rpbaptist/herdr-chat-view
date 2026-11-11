@@ -1,11 +1,13 @@
 // config.toml: one table per feature, one parser per table.
 import { parseStatus } from "./status.ts";
 import { parseFont } from "./fonts.ts";
+import { parseTheme, type ThemeMode } from "./theme.ts";
+import { setKey, type Value } from "./config-edit.ts";
 
 export type SendKey = "enter" | "ctrl-enter";
 export type InputConfig = { sendKey: SendKey };
 // What the server sends to each page, apart from the status bar.
-export type Settings = { sendKey: SendKey };
+export type Settings = { sendKey: SendKey; themeMode: ThemeMode };
 
 const SEND_KEYS: SendKey[] = ["enter", "ctrl-enter"];
 
@@ -20,7 +22,7 @@ function parseInput(input: Record<string, unknown>): InputConfig {
 }
 
 // A new table is one new entry here.
-const TABLES = { status: parseStatus, input: parseInput, font: parseFont };
+const TABLES = { status: parseStatus, input: parseInput, font: parseFont, theme: parseTheme };
 type Tables = { [K in keyof typeof TABLES]: ReturnType<(typeof TABLES)[K]> };
 export type Config = Tables & { error: string | null };
 
@@ -43,7 +45,7 @@ function parseTables(toml: Record<string, unknown>): Tables {
 
 const DEFAULTS = parseTables({});
 
-export const pageSettings = (config: Config): Settings => ({ sendKey: config.input.sendKey });
+export const pageSettings = (config: Config): Settings => ({ sendKey: config.input.sendKey, themeMode: config.theme.mode });
 
 // The last config text and its result: the server resolves the config every second.
 let cache: { text: string | null; config: Config } | null = null;
@@ -60,4 +62,13 @@ export function loadConfig(text: string | null): Config {
     cache = { text, config };
   }
   return cache.config;
+}
+
+// The config text with one key set, or an Error that names the problem. Only a valid file comes back.
+export function updateConfig(text: string | null, table: string, key: string, value: Value): string {
+  if (!isTableName(table)) throw new Error(`unknown table ${table} (use ${NAMES})`);
+  const next = setKey(text ?? "", table, key, value);
+  const { error } = loadConfig(next);
+  if (error) throw new Error(error);
+  return next;
 }

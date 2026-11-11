@@ -3,13 +3,13 @@
 //   bun herdr-chat.ts toggle   switch the focused agent between terminal and chat view
 //   bun herdr-chat.ts close    close the chat pane of the focused agent
 //   bun herdr-chat.ts serve    run the local chat server (started by toggle)
-import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { inputText } from "./screen.ts";
-import { loadConfig, pageSettings } from "./config.ts";
+import { loadConfig, pageSettings, updateConfig } from "./config.ts";
 import { statusBar, usesBranch } from "./status.ts";
-import { themeCss } from "./theme.ts";
+import { themeStyle } from "./theme.ts";
 import { fontCss, omarchyFamily } from "./fonts.ts";
 import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
@@ -202,7 +202,7 @@ type Client = {
   skills: Map<string, Skill>;
 };
 
-// The status bar config. HERDR_CHAT_CONFIG overrides the path, so a test run does not touch the user's file.
+// The plugin config. HERDR_CHAT_CONFIG overrides the path, so a test run does not touch the user's file.
 // null when herdr cannot give the plugin config directory: the status bar then uses the defaults.
 async function configPath(): Promise<string | null> {
   if (process.env.HERDR_CHAT_CONFIG) return process.env.HERDR_CHAT_CONFIG;
@@ -220,12 +220,30 @@ function readConfig(path: string | null): string | null {
   }
 }
 
-function readTheme(): string {
+// Read-only: the herdr config, and the colors.toml of an Omarchy theme. A null name is the active theme.
+// The theme directory is where `omarchy theme dir` looks: the user's copy first.
+const herdrConfigFile = process.env.HERDR_CONFIG_PATH ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "herdr/config.toml");
+const readText = (path: string): string | null => {
   try {
-    return themeCss(readFileSync(themeFile, "utf8"));
+    return readFileSync(path, "utf8");
   } catch {
-    return "";
+    return null;
   }
+};
+function themeColors(name: string | null): string | null {
+  if (name === null) return readText(themeFile);
+  const user = join(homedir(), ".config/omarchy/themes", name);
+  return readText(join(existsSync(user) ? user : join(process.env.OMARCHY_PATH ?? "/usr/share/omarchy", "themes", name), "colors.toml"));
+}
+
+// The config file text changed to set one key. The text is checked before it is written, and written in one step.
+function writeConfigKey(path: string, table: string, key: string, value: unknown): string {
+  const text = updateConfig(readConfig(path), table, key, value as never);
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, text);
+  renameSync(tmp, path);
+  return text;
 }
 
 // The Omarchy terminal font, read once at server start. Empty when omarchy is missing or fails.
@@ -251,7 +269,10 @@ async function serve() {
   const [configFile, omarchy] = await Promise.all([configPath(), omarchyFont()]);
   let config = readConfig(configFile);
   // The terminal colors, and the fonts and sizes from config.toml.
-  const readStyle = () => `${readTheme()}\n${fontCss(loadConfig(config).font, omarchy)}`;
+  const readStyle = () => {
+    const { theme, font } = loadConfig(config);
+    return `${themeStyle(theme.mode, readText(herdrConfigFile), themeColors)}\n${fontCss(font, omarchy)}`;
+  };
   let theme = readStyle();
   // The page settings from config.toml, sent when a page connects and when a value changes.
   function sendSettings(c: Client) {
@@ -396,13 +417,17 @@ async function serve() {
         .catch(() => {});
     }
   }, 1000);
-  setInterval(() => {
-    config = readConfig(configFile);
+  // Send the settings and the style that the current config and themes give.
+  function syncPages() {
     for (const c of clients) sendSettings(c);
     const next = readStyle();
     if (next === theme) return;
     theme = next;
     for (const c of clients) c.send("theme", theme);
+  }
+  setInterval(() => {
+    config = readConfig(configFile);
+    syncPages();
   }, 2000);
   await pollAgents();
 
@@ -489,6 +514,15 @@ async function serve() {
         case "POST /api/view":
           try {
             await (body.view === "terminal" ? toTerminal(pane) : toChat(pane));
+            return ok();
+          } catch (e) {
+            return fail(e);
+          }
+        case "POST /api/config":
+          try {
+            if (!configFile) throw new Error("no config file path");
+            config = writeConfigKey(configFile, String(body.table), String(body.key), body.value);
+            syncPages();
             return ok();
           } catch (e) {
             return fail(e);
