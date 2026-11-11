@@ -7,7 +7,7 @@ An optional `config.toml` controls the status bar under the composer. It can hid
 - `sb-default` shows the screen chips in the agent's order when there is no config file.
 - `sb-hide` hides the screen chips that match a `hide` regex.
 - `sb-items` places chips in the `items` order (`"/regex/"`, `"*"`, built-in names).
-- `sb-builtin` shows the `kind`, `cwd` and `status` built-in items as `#status .seg.builtin.<name>`. The `status` item has the herdr state color.
+- `sb-builtin` shows the `kind`, `cwd`, `status` and `branch` built-in items as `#status .seg.builtin.<name>`. The `status` item has the herdr state color. The `branch` item shows the git branch of the agent's directory (the fixture runs in the checkout, so the journey compares it with `git branch --show-current` there).
 - `sb-mode` hides the mode pill with `mode = false`.
 - `sb-error` shows a config error in `#err` and uses the defaults. The error goes away when the file is correct.
 - `sb-live` shows each change with no page reload.

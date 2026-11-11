@@ -63,8 +63,10 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
 - `items` (default `["*"]`) sets the order. A regex places all the screen
   chips that match and are not placed yet. `"*"` places all the other screen
   chips. A list without `"*"` shows only the listed items. The built-in items
-  are `kind` (agent kind), `cwd` (the working directory, with `~` for home)
-  and `status` (the herdr agent status, in the state color).
+  are `kind` (agent kind), `cwd` (the working directory, with `~` for home),
+  `status` (the herdr agent status, in the state color) and `branch` (the git
+  branch of the agent's working directory; no chip outside a git repository or
+  on a detached HEAD). The server runs git only when `items` lists `branch`.
 
 - `input.send_key` (default `"enter"`) sets the key that sends the message. With
   `"ctrl-enter"`, Enter and Shift+Enter add a new line, and Ctrl+Enter or
@@ -91,9 +93,11 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | File | Purpose |
 | --- | --- |
 | `herdr-chat.ts` | `toggle` and `close` actions, and the local chat server |
-| `transcripts.ts` | Claude Code and Codex transcript parsers |
+| `transcripts.ts` | Claude Code and Codex transcript and skill-list parsers |
+| `agents.ts` | One descriptor for each agent kind: parsers, transcript lookup, skill trigger, built-in commands |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |
 | `config.ts` | Parses `config.toml`: one table, one parser |
+| `branches.ts` | The git branch of a working directory, cached |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
 | `theme.ts` | Omarchy theme colors as CSS variables |
 | `index.html` | The chat page |

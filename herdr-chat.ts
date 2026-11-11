@@ -8,10 +8,12 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { inputText } from "./screen.ts";
 import { loadConfig, pageSettings } from "./config.ts";
-import { statusBar } from "./status.ts";
+import { statusBar, usesBranch } from "./status.ts";
 import { themeCss } from "./theme.ts";
+import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
-import { addSkills, parsers, skillParsers, transcriptPath, type Item, type Skill } from "./transcripts.ts";
+import { agentOf, transcriptPath } from "./agents.ts";
+import { addSkills, type Item, type Skill } from "./transcripts.ts";
 
 const PLUGIN_ID = "rpbaptist.herdr-chat-view";
 const IDLE_EXIT_MS = 10 * 60_000;
@@ -315,29 +317,29 @@ async function serve() {
   async function pump(c: Client) {
     const a = agentFor(c.pane);
     const session = a?.agent_session?.value;
+    const agent = agentOf(a?.agent);
     const key = `${a?.agent}/${session}`;
     if (key !== c.session) {
       c.session = key;
       c.offset = 0;
       c.seq = 0;
-      c.path = a && session && parsers[a.agent] ? await transcriptPath(a.agent, session) : null;
-      c.send("reset", { kind: a?.agent ?? null, transcript: !!c.path, parsed: !!(a && parsers[a.agent]) });
+      c.path = a && session && agent ? await transcriptPath(a.agent, session) : null;
+      c.send("reset", { kind: a?.agent ?? null, transcript: !!c.path, parsed: !!(a && agent) });
       c.skills = new Map();
       c.send("completions", completions(a?.agent, []));
     }
     // A new session writes its transcript only after the first message.
-    if (!c.path && a && session && parsers[a.agent]) {
+    if (!c.path && a && session && agent) {
       c.path = await transcriptPath(a.agent, session);
       if (c.path) c.send("reset", { kind: a.agent, transcript: true, parsed: true });
     }
-    if (!c.path || !a) return;
+    if (!c.path || !a || !agent) return;
     const file = Bun.file(c.path);
     if (file.size <= c.offset) return;
     const bytes = new Uint8Array(await file.slice(c.offset).arrayBuffer());
     const end = bytes.lastIndexOf(10);
     if (end < 0) return;
     c.offset += end + 1;
-    const parse = parsers[a.agent];
     const lines: unknown[] = [];
     const items: Item[] = [];
     for (const text of new TextDecoder().decode(bytes.subarray(0, end)).split("\n")) {
@@ -345,13 +347,14 @@ async function serve() {
       try {
         const line = JSON.parse(text);
         lines.push(line);
-        items.push(...parse(line, c.seq++));
+        items.push(...agent.parse(line, c.seq++));
       } catch {}
     }
     if (items.length) c.send("items", items);
-    if (addSkills(c.skills, skillParsers[a.agent]?.(lines) ?? [])) c.send("completions", completions(a.agent, c.skills.values()));
+    if (addSkills(c.skills, agent.parseSkills(lines))) c.send("completions", completions(a.agent, c.skills.values()));
   }
 
+  const branches = branchCache();
   setInterval(pollAgents, 1000);
   setInterval(() => {
     for (const c of clients) pump(c).catch((e) => console.error("pump:", e));
@@ -367,7 +370,11 @@ async function serve() {
       herdr(["agent", "read", c.pane, "--source", "visible", "--format", "ansi"])
         .then((screen) => {
           // A config change gives a new model here, so the page gets it on the next tick.
-          const json = JSON.stringify(statusBar(String(screen), agentFor(c.pane) ?? null, loadConfig(config), homedir()));
+          const a = agentFor(c.pane);
+          const cwd = a?.foreground_cwd || a?.cwd;
+          const cfg = loadConfig(config);
+          const withBranch = a && cwd && usesBranch(cfg.status) ? { ...a, branch: branches.get(cwd) } : a;
+          const json = JSON.stringify(statusBar(String(screen), withBranch ?? null, cfg, homedir()));
           if (json === c.status) return;
           c.status = json;
           c.send("status", JSON.parse(json));
