@@ -1,13 +1,11 @@
 // Parse agent transcript lines into chat items.
-import { homedir } from "node:os";
-import { Glob } from "bun";
 
 export type Item =
   | { kind: "user" | "assistant" | "note"; id: string; text: string; ts?: string }
   | { kind: "tool_call"; id: string; name: string; input: string; ts?: string }
   | { kind: "tool_result"; id: string; output: string; error: boolean; ts?: string };
 
-type Parser = (line: any, seq: number) => Item[];
+export type Parser = (line: any, seq: number) => Item[];
 
 const MAX_TOOL_TEXT = 4000;
 const clip = (s: string, n = MAX_TOOL_TEXT) => (s.length > n ? s.slice(0, n) + "\n…" : s);
@@ -51,7 +49,7 @@ function claudeUserText(s: string): { kind: "user" | "note"; text: string } | nu
   return { kind: "user", text: s };
 }
 
-const parseClaude: Parser = (line, seq) => {
+export const parseClaude: Parser = (line, seq) => {
   if (line.isSidechain || line.isMeta) return [];
   if (line.type !== "user" && line.type !== "assistant") return [];
   const base = line.uuid ?? `c${seq}`;
@@ -82,7 +80,7 @@ const parseClaude: Parser = (line, seq) => {
 // Codex injects AGENTS.md and environment context as user messages.
 const codexNoise = (s: string) => s.startsWith("<") || s.startsWith("# AGENTS.md");
 
-const parseCodex: Parser = (line, seq) => {
+export const parseCodex: Parser = (line, seq) => {
   if (line.type !== "response_item") return [];
   const p = line.payload ?? {};
   const ts = line.timestamp;
@@ -116,12 +114,10 @@ const parseCodex: Parser = (line, seq) => {
   return [];
 };
 
-export const parsers: Record<string, Parser> = { claude: parseClaude, codex: parseCodex };
-
 // ---------- skill lists ----------
 
 export type Skill = { name: string; description: string };
-type SkillParser = (lines: any[]) => Skill[];
+export type SkillParser = (lines: any[]) => Skill[];
 
 // Add skills to a list by name. A skill with no description does not replace
 // one that has a description. Return true when the list changed.
@@ -141,7 +137,7 @@ const SKILL_LINE = /^- (\S+?)(?::\s+(.*?))?\s*$/;
 
 // Claude Code lists skills in `skill_listing` attachments: the first one has all
 // skills, later ones (`isInitial: false`) add new ones.
-const claudeSkills: SkillParser = (lines) => {
+export const claudeSkills: SkillParser = (lines) => {
   const skills: Skill[] = [];
   for (const line of lines) {
     const a = line?.attachment;
@@ -159,7 +155,7 @@ const claudeSkills: SkillParser = (lines) => {
 
 // Codex lists skills in a developer message, under "### Available skills", as
 // "- name: description (file: path)" lines.
-const codexSkills: SkillParser = (lines) => {
+export const codexSkills: SkillParser = (lines) => {
   const skills: Skill[] = [];
   for (const line of lines) {
     const p = line?.payload;
@@ -178,28 +174,3 @@ const codexSkills: SkillParser = (lines) => {
   }
   return skills;
 };
-
-export const skillParsers: Record<string, SkillParser> = { claude: claudeSkills, codex: codexSkills };
-
-const home = homedir();
-const pathCache = new Map<string, string>();
-
-async function firstMatch(cwd: string, pattern: string): Promise<string | null> {
-  for await (const f of new Glob(pattern).scan({ cwd, absolute: true, onlyFiles: true })) return f;
-  return null;
-}
-
-// Find the transcript file for an agent kind and session ID.
-export async function transcriptPath(kind: string, session: string): Promise<string | null> {
-  if (!/^[\w-]+$/.test(session)) return null;
-  const key = `${kind}:${session}`;
-  const cached = pathCache.get(key);
-  if (cached && (await Bun.file(cached).exists())) return cached;
-  let found: string | null = null;
-  try {
-    if (kind === "claude") found = await firstMatch(`${home}/.claude/projects`, `*/${session}.jsonl`);
-    else if (kind === "codex") found = await firstMatch(`${home}/.codex/sessions`, `**/rollout-*-${session}.jsonl`);
-  } catch {}
-  if (found) pathCache.set(key, found);
-  return found;
-}
