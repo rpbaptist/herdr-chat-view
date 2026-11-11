@@ -2,6 +2,7 @@
 //
 //   bun herdr-chat.ts toggle   switch the focused agent between terminal and chat view
 //   bun herdr-chat.ts close    close the chat pane of the focused agent
+//   bun herdr-chat.ts restore  startup hook: clean up chat panes that a herdr restart left behind
 //   bun herdr-chat.ts serve    run the local chat server (started by toggle)
 import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -49,28 +50,71 @@ const readJson = <T>(path: string, fallback: T): T => {
   }
 };
 
-// Agent pane id -> chat pane id.
-type PaneMap = Record<string, string>;
-const loadPanes = () => readJson<PaneMap>(panesFile, {});
+// Agent pane id -> its chat pane and the view that shows. The other view waits in a
+// tab of its own, so a new split in the visible tab cannot show both views.
+type View = "chat" | "terminal";
+type Rec = { chat: string; view: View };
+type PaneMap = Record<string, Rec>;
+// A map from before the tabs holds the chat pane id only; that layout is zoomed, with both views in one tab.
+const loadPanes = () =>
+  Object.fromEntries(Object.entries(readJson<Record<string, Rec | string>>(panesFile, {})).map(([a, r]) => [a, typeof r === "string" ? { chat: r, view: "chat" } : r])) as PaneMap;
 const savePanes = (m: PaneMap) => writeFileSync(panesFile, JSON.stringify(m));
+const PARK_LABEL: Record<View, string> = { chat: "terminal (hidden)", terminal: "chat (hidden)" };
 
-async function paneExists(id: string): Promise<boolean> {
+async function paneTab(id: string): Promise<string | null> {
   try {
-    await herdr(["pane", "get", id]);
-    return true;
+    return (await herdr(["pane", "get", id])).pane.tab_id;
+  } catch {
+    return null;
+  }
+}
+
+// After a herdr restart the chat pane comes back as a plain shell, without its plugin.
+async function isChat(id: string): Promise<boolean> {
+  try {
+    const { process_info } = await herdr(["pane", "process-info", "--pane", id]);
+    return process_info.foreground_processes.some((p: { cmdline?: string }) => p.cmdline?.includes("chat-pane.sh"));
   } catch {
     return false;
   }
 }
 
-async function zoomOnly(pane: string, focus: () => Promise<unknown>) {
-  await herdr(["pane", "zoom", pane, "--off"]).catch(() => {});
-  await focus();
-  await herdr(["pane", "zoom", pane, "--on"]);
+async function move(args: string[]) {
+  const { move_result: r } = await herdr(["pane", "move", ...args, "--no-focus"]);
+  if (!r?.changed) throw new HerdrError(`pane move: ${r?.reason ?? "no change"}`);
 }
 
-const showTerminal = (agent: string) => zoomOnly(agent, () => herdr(["agent", "focus", agent]));
-const showChat = (chat: string) => zoomOnly(chat, () => herdr(["plugin", "pane", "focus", chat]));
+// Show one view in the slot of the other view, and move the other view to a tab of its own.
+// A second call for the same view only focuses it.
+async function show(agent: string, view: View) {
+  const panes = loadPanes();
+  const rec = panes[agent];
+  if (!rec) throw new Error("no chat pane for this agent");
+  const [target, other] = view === "chat" ? [rec.chat, agent] : [agent, rec.chat];
+  const [tab, otherTab] = await Promise.all([paneTab(target), paneTab(other)]);
+  if (!tab || !otherTab) throw new Error(`pane ${tab ? other : target} is closed`);
+  if (tab !== otherTab || rec.view !== view) await herdr(["pane", "zoom", other, "--off"]).catch(() => {});
+  if (tab !== otherTab && rec.view !== view) {
+    // Swap works in one tab only. The high ratio keeps the target small until the swap.
+    await move([target, "--tab", otherTab, "--split", "right", "--target-pane", other, "--ratio", "0.95"]);
+    await herdr(["pane", "swap", "--source-pane", target, "--target-pane", other]);
+  }
+  if (tab === otherTab || rec.view !== view) await move([other, "--new-tab", "--label", PARK_LABEL[view]]);
+  panes[agent] = { ...rec, view };
+  savePanes(panes);
+  await (view === "chat" ? herdr(["plugin", "pane", "focus", rec.chat]) : herdr(["agent", "focus", agent]));
+}
+
+// Put the terminal back in its slot and close the chat pane.
+async function release(agent: string) {
+  const rec = loadPanes()[agent];
+  if (!rec) return;
+  if (await paneTab(agent)) await show(agent, "terminal").catch(() => {});
+  await herdr(["pane", "close", rec.chat]).catch(() => {});
+  const panes = loadPanes();
+  delete panes[agent];
+  savePanes(panes);
+}
 
 // ---------- server lifecycle ----------
 
@@ -108,38 +152,43 @@ async function notify(title: string, body: string) {
 async function toggle() {
   const focused = process.env.HERDR_PANE_ID;
   if (!focused) throw new Error("HERDR_PANE_ID is not set");
-  const panes = loadPanes();
-  const agent = Object.keys(panes).find((a) => panes[a] === focused) ?? focused;
-  let chat = panes[agent] && (await paneExists(panes[agent])) ? panes[agent] : null;
+  let panes = loadPanes();
+  const agent = Object.keys(panes).find((a) => panes[a].chat === focused) ?? focused;
+  // A closed agent pane, or a chat pane that is closed or a shell after a herdr restart.
+  if (panes[agent] && (!(await isChat(panes[agent].chat)) || !(await paneTab(agent)))) {
+    await release(agent);
+    if (focused !== agent) return;
+    panes = loadPanes();
+  }
 
-  if (!chat) {
-    let title = "";
+  if (!panes[agent]) {
+    let a: Agent;
     try {
-      const { agent: a } = await herdr(["agent", "get", agent]);
-      title = a?.label || a?.terminal_title_stripped || a?.agent || "";
+      ({ agent: a } = await herdr(["agent", "get", agent]));
     } catch {
       return notify("herdr-chat", "No agent in this pane");
     }
+    const title = a?.label || a?.terminal_title_stripped || a?.agent || "";
     const server = await ensureServer();
     const url = `http://127.0.0.1:${server.port}/?t=${server.token}#${encodeURIComponent(agent)}`;
+    // Open in a tab of its own; the view switch then moves it into the slot of the agent.
     const res = await herdr([
       "plugin", "pane", "open", "--plugin", PLUGIN_ID, "--entrypoint", "chat",
-      "--placement", "split", "--target-pane", agent, "--direction", "right",
-      "--env", `HERDR_CHAT_URL=${url}`, "--focus",
+      "--placement", "tab", "--workspace", a.workspace_id!,
+      "--env", `HERDR_CHAT_URL=${url}`, "--no-focus",
     ]);
-    chat = res?.plugin_pane?.pane?.pane_id;
-    if (!chat) throw new Error(`unexpected plugin pane open result: ${JSON.stringify(res)}`);
-    panes[agent] = chat;
+    const pane = res?.plugin_pane?.pane;
+    if (!pane?.pane_id) throw new Error(`unexpected plugin pane open result: ${JSON.stringify(res)}`);
+    panes[agent] = { chat: pane.pane_id, view: "terminal" };
     savePanes(panes);
+    await herdr(["tab", "rename", pane.tab_id, PARK_LABEL.terminal]).catch(() => {});
     // Name the pane after the agent; an empty label shows pixel's process name.
-    if (title) await herdr(["pane", "rename", chat, title]).catch(() => {});
+    if (title) await herdr(["pane", "rename", pane.pane_id, title]).catch(() => {});
     return switchView(server, agent, "chat");
   }
 
   const server = await ensureServer(); // the open page reconnects to the same port and token
-  const { layout } = await herdr(["pane", "layout", "--pane", agent]);
-  const view = layout?.zoomed && layout.focused_pane_id === chat ? "terminal" : "chat";
-  return switchView(server, agent, view);
+  return switchView(server, agent, focused === agent ? "chat" : "terminal");
 }
 
 // The server moves the draft between the chat and the agent's input box.
@@ -161,13 +210,13 @@ async function readInput(agent: string): Promise<string | null> {
 async function close() {
   const focused = process.env.HERDR_PANE_ID;
   const panes = loadPanes();
-  const agent = Object.keys(panes).find((a) => a === focused || panes[a] === focused);
-  if (!agent) return;
-  await herdr(["plugin", "pane", "close", panes[agent]]).catch(() => {});
-  delete panes[agent];
-  savePanes(panes);
-  await herdr(["pane", "zoom", agent, "--off"]).catch(() => {});
-  await herdr(["agent", "focus", agent]).catch(() => {});
+  const agent = Object.keys(panes).find((a) => a === focused || panes[a].chat === focused);
+  if (agent) await release(agent);
+}
+
+// Startup hook: give each agent whose chat pane did not survive a herdr restart its slot back.
+async function restore() {
+  for (const [agent, { chat }] of Object.entries(loadPanes())) if (!(await isChat(chat))) await release(agent);
 }
 
 // ---------- server ----------
@@ -243,7 +292,7 @@ async function serve() {
 
   // Chat -> terminal: type the chat draft into an empty input box.
   async function toTerminal(pane: string) {
-    await showTerminal(pane);
+    await show(pane, "terminal");
     const draft = drafts.get(pane) ?? "";
     if (!draft.trim() || agentFor(pane)?.agent !== "claude") return;
     if ((await readInput(pane).catch(() => null)) !== "") return;
@@ -254,8 +303,7 @@ async function serve() {
   // Terminal -> chat: move the input box text into the chat draft. Clearing it
   // takes Esc twice, which would interrupt a working agent, so only when idle.
   async function toChat(pane: string) {
-    const chat = loadPanes()[pane];
-    if (!chat) throw new Error("no chat pane for this agent");
+    if (!loadPanes()[pane]) throw new Error("no chat pane for this agent");
     const a = agentFor(pane);
     if (a?.agent === "claude" && (a.agent_status === "idle" || a.agent_status === "done")) {
       const text = await readInput(pane).catch(() => null);
@@ -267,7 +315,7 @@ async function serve() {
         await herdr(["agent", "send-keys", pane, "esc"]);
       }
     }
-    await showChat(chat);
+    await show(pane, "chat");
   }
 
   const agentFor = (pane: string) => agents.find((a) => a.pane_id === pane);
@@ -276,7 +324,7 @@ async function serve() {
   const labels = new Map<string, string>();
   function syncLabels() {
     const panes = loadPanes();
-    for (const [agent, chat] of Object.entries(panes)) {
+    for (const [agent, { chat }] of Object.entries(panes)) {
       const a = agentFor(agent);
       const title = a?.label || a?.terminal_title_stripped;
       if (!title || labels.get(chat) === title) continue;
@@ -492,10 +540,10 @@ async function serve() {
 
 // ---------- main ----------
 
-const commands: Record<string, () => Promise<unknown>> = { toggle, close, serve };
+const commands: Record<string, () => Promise<unknown>> = { toggle, close, restore, serve };
 const cmd = commands[process.argv[2] ?? ""];
 if (!cmd) {
-  console.error("usage: herdr-chat.ts toggle|close|serve");
+  console.error("usage: herdr-chat.ts toggle|close|restore|serve");
   process.exit(2);
 }
 try {
