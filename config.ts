@@ -1,11 +1,14 @@
 // config.toml: one table per feature, one parser per table.
-import { parseStatus } from "./status.ts";
+import { parseStatus, statusSettings, type StatusSettings } from "./status.ts";
+import { parseFont } from "./fonts.ts";
+import { parseTheme, type ThemeMode } from "./theme.ts";
 import { parseVoice, voiceSettings, type VoiceSettings } from "./voice.ts";
+import { setKey, type Value } from "./config-edit.ts";
 
 export type SendKey = "enter" | "ctrl-enter";
 export type InputConfig = { sendKey: SendKey };
-// What the server sends to each page, apart from the status bar.
-export type Settings = { sendKey: SendKey; voice: VoiceSettings };
+// What the server sends to each page, apart from the status bar. error is the config.toml error line: the page does not write while there is one.
+export type Settings = { sendKey: SendKey; themeMode: ThemeMode; status: StatusSettings; error: string | null; voice: VoiceSettings };
 
 const SEND_KEYS: SendKey[] = ["enter", "ctrl-enter"];
 
@@ -20,7 +23,7 @@ function parseInput(input: Record<string, unknown>): InputConfig {
 }
 
 // A new table is one new entry here.
-const TABLES = { status: parseStatus, input: parseInput, voice: parseVoice };
+const TABLES = { status: parseStatus, input: parseInput, font: parseFont, theme: parseTheme, voice: parseVoice };
 type Tables = { [K in keyof typeof TABLES]: ReturnType<(typeof TABLES)[K]> };
 export type Config = Tables & { error: string | null };
 
@@ -45,7 +48,7 @@ const DEFAULTS = parseTables({});
 
 // which finds a program on PATH; the server passes Bun.which.
 export const pageSettings = (config: Config, which: (bin: string) => string | null): Settings =>
-  ({ sendKey: config.input.sendKey, voice: voiceSettings(config.voice, which) });
+  ({ sendKey: config.input.sendKey, themeMode: config.theme.mode, status: statusSettings(config.status), error: config.error, voice: voiceSettings(config.voice, which) });
 
 // The last config text and its result: the server resolves the config every second.
 let cache: { text: string | null; config: Config } | null = null;
@@ -62,4 +65,13 @@ export function loadConfig(text: string | null): Config {
     cache = { text, config };
   }
   return cache.config;
+}
+
+// The config text with one key set, or an Error that names the problem. Only a valid file comes back.
+export function updateConfig(text: string | null, table: string, key: string, value: Value): string {
+  if (!isTableName(table)) throw new Error(`unknown table ${table} (use ${NAMES})`);
+  const next = setKey(text ?? "", table, key, value);
+  const { error } = loadConfig(next);
+  if (error) throw new Error(error);
+  return next;
 }

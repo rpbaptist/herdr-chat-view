@@ -66,7 +66,7 @@ A journey is a TypeScript file that exports `default async (j: Journey) => {}`. 
 - `j.transcript()` returns the parsed transcript lines.
 - `j.until(what, fn)` polls until `fn` returns a true value.
 
-Use these page handles: `#input` (composer), `#send`, `#stop`, `#mode` (mode pill, `.ml` holds the label), `#term` (the "Terminal" button), `#items .msg.user`, `#items .msg.assistant`, `#items .msg.note`, `#items details.steps` (tool-call group), `#status .seg` (footer segments), `#blocked` (`.on` when the agent asks a question), `#hchip` (agent status text), `#err` (error line), `#complete` (auto-complete popup, `.on` when open; entries are `.opt`, the selected one `.opt.on`, the name in `.nm`), `#mic` (dictation button, `.on` when shown, `.rec` while recording, `.busy` while transcribing).
+Use these page handles: `#input` (composer), `#send`, `#stop`, `#mode` (mode pill, `.ml` holds the label), `#term` (the "Terminal" button), `#items .msg.user`, `#items .msg.assistant`, `#items .msg.note`, `#items details.steps` (tool-call group), `#status .seg` (footer segments), `#blocked` (`.on` when the agent asks a question), `#hchip` (agent status text), `#err` (error line), `#complete` (auto-complete popup, `.on` when open; entries are `.opt`, the selected one `.opt.on`, the name in `.nm`), `#gear` (opens the status bar settings popover), `#settings` (the popover; its controls have a stable `data-id`, for example `mode`, `items:new`, `hide:0`, `items:1:up`, `add:kind`, `close`), `#mic` (dictation button, `.on` when shown, `.rec` while recording, `.busy` while transcribing).
 
 The fixture agent (`scripts/fixture-agent.ts`) does these things:
 
@@ -75,6 +75,7 @@ The fixture agent (`scripts/fixture-agent.ts`) does these things:
 - On its screen it shows `last: <text>` and `mode: <n>`.
 - Shift+Tab cycles the mode line: none, then `accept edits on`, then `plan mode on`.
 - Esc clears the input box.
+- Its footer shows `fixture-agent · verify`, `⎇ main` and `42% context`. The message `context <n>` changes the last chip to `<n>% context`.
 
 The shipped journeys are in `journeys/`. Each feature file in `features/` lists its recipe and its proof. Start at [features/README.md](features/README.md).
 

@@ -6,9 +6,11 @@
 <title>herdr chat</title>
 <style>
 :root {
-  /* Fallback colors. /theme.css overrides the base colors with the Omarchy terminal theme. */
-  --bg: #faf9f5; --fg: #29261b; --muted: #7d7869; --accent: #c96442;
-  --ok: #2f9e5b; --warn: #c98a12; --err: #c8443a;
+  /* Fallback colors, light then dark. color-scheme picks one: both by default (the browser setting),
+     or one when /theme.css sets it for the theme mode. /theme.css overrides the base colors with a terminal theme. */
+  color-scheme: light dark;
+  --bg: light-dark(#faf9f5, #262624); --fg: light-dark(#29261b, #ece9e1); --muted: light-dark(#7d7869, #9c978a);
+  --accent: light-dark(#c96442, #d97757); --ok: light-dark(#2f9e5b, #5fc58a); --warn: light-dark(#c98a12, #e0b04c); --err: light-dark(#c8443a, #ef6b5f);
   --surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
   --raised: color-mix(in srgb, var(--fg) 7%, var(--bg));
   --line: color-mix(in srgb, var(--fg) 13%, var(--bg));
@@ -17,6 +19,8 @@
   --shadow: 0 1px 2px color-mix(in srgb, black 8%, transparent), 0 6px 24px color-mix(in srgb, black 10%, transparent);
   --sans: "Inter", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: monospace;
+  /* Text and code size. /theme.css sets them from the [font] table of config.toml. */
+  --fs: 15px; --ms: 13px;
   /* Agent state colors, as herdr's sidebar uses them: working yellow,
      blocked red, done teal, idle green, unknown grey. */
   --working: var(--c11, #d79921);
@@ -24,13 +28,10 @@
   --done: var(--c14, #5fa38a);
   --idle: var(--c10, var(--ok));
 }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #262624; --fg: #ece9e1; --muted: #9c978a; --accent: #d97757; --ok: #5fc58a; --warn: #e0b04c; --err: #ef6b5f; }
-}
 ::selection { background: var(--sel-bg, var(--accent)); color: var(--sel-fg, var(--bg)); }
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--fg); font: 15px/1.65 var(--sans); overflow: hidden; -webkit-font-smoothing: antialiased; }
+body { background: var(--bg); color: var(--fg); font: var(--fs)/1.65 var(--sans); overflow: hidden; -webkit-font-smoothing: antialiased; }
 svg { width: 16px; height: 16px; flex: none; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 
@@ -38,10 +39,15 @@ main { display: grid; grid-template-rows: auto 1fr auto; height: 100vh; }
 
 /* top bar */
 header { display: flex; align-items: center; gap: 10px; padding: 10px 18px; min-width: 0; }
-header .chip { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+header .chip { font-size: calc(var(--fs) * 12 / 15); color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 header .sp { flex: 1; }
-.iconbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--soft); padding: 6px 10px; border-radius: 8px; }
+.iconbtn { display: inline-flex; align-items: center; gap: 6px; font-size: calc(var(--fs) * 13 / 15); color: var(--soft); padding: 6px 10px; border-radius: 8px; }
 .iconbtn:hover { background: var(--raised); color: var(--fg); }
+.themesw { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--raised); }
+.themesw button { font-size: calc(var(--fs) * 12 / 15); line-height: 1.4; color: var(--soft); padding: 3px 10px; border-radius: 7px; }
+.themesw button:hover { color: var(--fg); }
+.themesw button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+.themesw button:focus-visible, .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.working { background: var(--working); }
 .dot.working.dim { opacity: .3; }
@@ -56,7 +62,7 @@ header .sp { flex: 1; }
 .msg.user { display: flex; justify-content: flex-end; }
 .msg.user .b { background: var(--user); border-radius: 18px; padding: 9px 16px; max-width: 80%; white-space: pre-wrap; word-break: break-word; }
 .msg.assistant .b { word-break: break-word; }
-.msg.note pre { color: var(--muted); font-size: 12.5px; background: none; border: 0; padding: 0 0 0 12px; border-left: 2px solid var(--line); border-radius: 0; }
+.msg.note pre { color: var(--muted); font-size: calc(var(--ms) * 12.5 / 13); background: none; border: 0; padding: 0 0 0 12px; border-left: 2px solid var(--line); border-radius: 0; }
 .b > :first-child { margin-top: 0; } .b > :last-child { margin-bottom: 0; }
 .b p { margin: 0 0 .8em; }
 .b h1, .b h2, .b h3, .b h4 { margin: 1.3em 0 .5em; line-height: 1.3; font-weight: 600; }
@@ -65,50 +71,50 @@ header .sp { flex: 1; }
 .b li { margin: .25em 0; }
 .b strong { font-weight: 600; }
 .b a { color: var(--c12, var(--accent)); text-decoration: underline; text-underline-offset: 2px; }
-.b table { border-collapse: collapse; margin: .8em 0; font-size: 14px; display: block; overflow-x: auto; }
+.b table { border-collapse: collapse; margin: .8em 0; font-size: calc(var(--fs) * 14 / 15); display: block; overflow-x: auto; }
 .b th, .b td { border-bottom: 1px solid var(--line); padding: 6px 12px 6px 0; text-align: left; }
 .b th { font-weight: 600; }
 code { font-family: var(--mono); font-size: .86em; background: var(--raised); padding: .12em .35em; border-radius: 5px; }
-pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; margin: .8em 0; }
+pre { font-family: var(--mono); font-size: var(--ms); line-height: 1.5; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; margin: .8em 0; }
 pre code { background: none; padding: 0; font-size: inherit; }
 .codeblock { position: relative; margin: .8em 0; }
 .codeblock pre { margin: 0; }
-.codeblock .copy { position: absolute; top: 6px; right: 6px; opacity: 0; font-size: 12px; color: var(--muted); padding: 3px 8px; border-radius: 6px; background: var(--raised); }
+.codeblock .copy { position: absolute; top: 6px; right: 6px; opacity: 0; font-size: calc(var(--fs) * 12 / 15); color: var(--muted); padding: 3px 8px; border-radius: 6px; background: var(--raised); }
 .codeblock:hover .copy { opacity: 1; }
 
 /* tool steps */
 .steps { margin: 14px 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-.steps > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 13.5px; color: var(--soft); }
+.steps > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: calc(var(--fs) * 13.5 / 15); color: var(--soft); }
 .steps > summary::-webkit-details-marker { display: none; }
 .steps > summary:hover { color: var(--fg); background: var(--surface); }
 .steps > summary .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .steps[open] > summary .chev { transform: rotate(90deg); }
 .steps[open] > summary { border-bottom: 1px solid var(--line); }
-.step { font-size: 13px; border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.step { font-size: calc(var(--fs) * 13 / 15); border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
 .step:first-of-type { border-top: 0; }
 .step > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 9px; padding: 7px 14px; color: var(--soft); }
 .step > summary::-webkit-details-marker { display: none; }
 .step > summary:hover { background: var(--surface); }
 .step .n { font-weight: 600; color: var(--fg); flex: none; }
-.step .i { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.step pre { margin: 0 14px 10px; max-height: 340px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+.step .i { font-family: var(--mono); font-size: calc(var(--ms) * 12 / 13); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step pre { margin: 0 14px 10px; max-height: 340px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: calc(var(--ms) * 12 / 13); }
 .st { width: 14px; height: 14px; display: inline-grid; place-items: center; flex: none; }
 .st.ok { color: var(--ok); } .st.err { color: var(--err); }
 /* No CSS animations: Chromium ticks them every frame, and pixel sends each
    changed frame to the terminal as an image, which makes typing lag.
    A timer in the script changes the spinners a few times per second. */
-.spin { font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--working); }
+.spin { font-family: var(--mono); font-size: calc(var(--ms) * 12 / 13); line-height: 1; color: var(--working); }
 
 /* working indicator */
-#working { display: none; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; margin: 18px 0 0; }
+#working { display: none; align-items: center; gap: 10px; color: var(--muted); font-size: calc(var(--fs) * 14 / 15); margin: 18px 0 0; }
 #working.on { display: flex; }
 /* Braille spinner, like herdr's agent panel; the same for every agent. */
-#working .spinner { font-family: var(--mono); color: var(--working); font-size: 15px; line-height: 1; width: 1ch; }
+#working .spinner { font-family: var(--mono); color: var(--working); font-size: calc(var(--ms) * 15 / 13); line-height: 1; width: 1ch; }
 #working .shimmer { color: var(--muted); }
 
-.empty { color: var(--muted); text-align: center; margin-top: 28vh; font-size: 14px; }
-#screen { white-space: pre; font-size: 12px; }
+.empty { color: var(--muted); text-align: center; margin-top: 28vh; font-size: calc(var(--fs) * 14 / 15); }
+#screen { white-space: pre; font-size: calc(var(--fs) * 12 / 15); }
 
 /* bottom: blocked card + composer */
 footer { padding: 0 24px 18px; }
@@ -117,10 +123,10 @@ footer { padding: 0 24px 18px; }
 #tobottom.on { display: flex; }
 #blocked { display: none; border: 1px solid color-mix(in srgb, var(--blocked) 55%, var(--line)); background: color-mix(in srgb, var(--blocked) 7%, var(--bg)); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; }
 #blocked.on { display: block; }
-#blocked .h { display: flex; align-items: center; gap: 8px; color: var(--blocked); font-weight: 600; font-size: 13px; margin-bottom: 8px; }
-#blocked pre { max-height: 34vh; overflow: auto; margin: 0 0 10px; background: var(--bg); font-size: 12px; }
+#blocked .h { display: flex; align-items: center; gap: 8px; color: var(--blocked); font-weight: 600; font-size: calc(var(--fs) * 13 / 15); margin-bottom: 8px; }
+#blocked pre { max-height: 34vh; overflow: auto; margin: 0 0 10px; background: var(--bg); font-size: calc(var(--ms) * 12 / 13); }
 .keys { display: flex; gap: 6px; flex-wrap: wrap; }
-.key { font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); }
+.key { font-size: calc(var(--fs) * 13 / 15); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); }
 .key:hover { border-color: var(--soft); }
 .key.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 /* auto-complete popup for skills and slash commands */
@@ -128,15 +134,15 @@ footer { padding: 0 24px 18px; }
 #complete.on { display: block; }
 #complete .opt { display: flex; align-items: baseline; gap: 10px; padding: 5px 10px; border-radius: 8px; cursor: pointer; min-width: 0; }
 #complete .opt.on { background: var(--raised); }
-#complete .nm { font-family: var(--mono); font-size: 13px; color: var(--fg); flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#complete .ds { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+#complete .nm { font-family: var(--mono); font-size: var(--ms); color: var(--fg); flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#complete .ds { font-size: calc(var(--fs) * 12.5 / 15); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .composer { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 12px 12px 10px 16px; }
 .composer:focus-within { border-color: color-mix(in srgb, var(--fg) 28%, var(--bg)); }
 textarea { width: 100%; resize: none; font: inherit; color: var(--fg); background: none; border: 0; outline: none; padding: 2px 0; max-height: 40vh; min-height: 26px; display: block; }
 textarea::placeholder { color: var(--muted); }
 .bar { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .bar .sp { flex: 1; }
-#mode { display: none; align-items: center; gap: 7px; font-size: 12.5px; color: var(--soft); padding: 4px 10px 4px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; max-width: 70%; overflow: hidden; }
+#mode { display: none; align-items: center; gap: 7px; font-size: calc(var(--fs) * 12.5 / 15); color: var(--soft); padding: 4px 10px 4px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; max-width: 70%; overflow: hidden; }
 #mode.on { display: inline-flex; }
 #mode:hover { color: var(--fg); border-color: var(--soft); }
 #mode .md { width: 7px; height: 7px; border-radius: 50%; background: var(--mc, var(--muted)); flex: none; }
@@ -154,14 +160,49 @@ textarea::placeholder { color: var(--muted); }
 @keyframes rec { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--err) 30%, transparent); } }
 #stop { display: none; background: var(--fg); color: var(--bg); }
 #stop.on { display: inline-flex; }
-#status { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 4px 0; font-size: 12px; }
-#status .seg { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 7px; padding: 2px 8px; white-space: pre; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#status { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 4px 0; font-size: calc(var(--fs) * 12 / 15); }
+#status .seg { font-family: var(--mono); font-size: calc(var(--ms) * 11.5 / 13); color: var(--muted); background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 7px; padding: 2px 8px; white-space: pre; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 #status .seg span { opacity: .9; }
 /* Built-in items: muted, and the status in the herdr state color, as in the header. */
 #status .builtin.working { color: var(--working); } #status .builtin.blocked { color: var(--blocked); }
 #status .builtin.done { color: var(--done); } #status .builtin.idle { color: var(--idle); }
 #status:empty { display: none; }
-#err { color: var(--err); font-size: 12.5px; margin-top: 6px; text-align: center; }
+/* The gear opens the status bar settings popover, which edits [status] of config.toml. */
+.statusrow { position: relative; display: flex; align-items: flex-start; gap: 6px; }
+.statusrow #status { flex: 1; min-width: 0; }
+#gear { margin: 10px 2px 0 auto; padding: 4px; border-radius: 7px; color: var(--muted); display: inline-flex; }
+#gear:hover, #gear[aria-expanded="true"] { color: var(--fg); background: var(--raised); }
+#gear svg, #settings svg { width: calc(var(--fs) * 14 / 15); height: calc(var(--fs) * 14 / 15); }
+#gear:focus-visible, #settings :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#settings { position: absolute; right: 0; bottom: calc(100% + 8px); width: min(27em, 100%); max-height: min(72vh, 40em); overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 12px 12px; z-index: 6; font-size: calc(var(--fs) * 13 / 15); line-height: 1.45; }
+#settings[hidden] { display: none; }
+#settings:focus { outline: none; }
+#settings .ph { display: flex; align-items: center; gap: 8px; }
+#settings .pt { font-weight: 600; flex: 1; }
+#settings h3 { font-size: calc(var(--fs) * 11.5 / 15); font-weight: 600; color: var(--muted); margin: 12px 0 5px; }
+#settings ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+#settings li, #settings .new { display: flex; align-items: center; gap: 3px; min-width: 0; }
+#settings .nm { font-family: var(--mono); font-size: calc(var(--ms) * 12 / 13); padding: 3px 0 3px 8px; }
+#settings .ds { color: var(--muted); flex: 1; min-width: 0; padding-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#settings input[type="text"] { flex: 1; min-width: 0; font-family: var(--mono); font-size: calc(var(--ms) * 12 / 13); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 3px 7px; }
+#settings input[type="text"]::placeholder { color: var(--muted); }
+#settings input.bad { border-color: var(--err); }
+#settings li.added input { border-color: var(--accent); }
+#settings .check { display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer; }
+#settings .check input { accent-color: var(--accent); margin: 0; width: 1em; height: 1em; }
+#settings .ib { display: inline-flex; padding: 4px; border-radius: 6px; color: var(--soft); }
+#settings .ib:hover:not(:disabled), #settings .tb:hover:not(:disabled) { background: var(--raised); color: var(--fg); }
+#settings button:disabled { opacity: .35; cursor: default; }
+#settings .tb { font-size: calc(var(--fs) * 12.5 / 15); color: var(--soft); padding: 3px 9px; border-radius: 7px; border: 1px solid var(--line); white-space: nowrap; }
+#settings .add { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+#settings .add .tb, #settings .chips .tb { font-family: var(--mono); font-size: calc(var(--ms) * 11.5 / 13); border-style: dashed; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#settings .new { margin-top: 6px; }
+#settings .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+#settings .hint, #settings .note { color: var(--muted); font-size: calc(var(--fs) * 12 / 15); }
+#settings .note code { color: var(--fg); }
+#settings .ferr { color: var(--err); font-size: calc(var(--fs) * 12 / 15); margin: 1px 0 3px; overflow-wrap: anywhere; }
+#settings .perr { color: var(--err); border: 1px solid color-mix(in srgb, var(--err) 45%, var(--line)); background: color-mix(in srgb, var(--err) 7%, var(--bg)); border-radius: 9px; padding: 6px 9px; margin-top: 8px; overflow-wrap: anywhere; }
+#err { color: var(--err); font-size: calc(var(--fs) * 12.5 / 15); margin-top: 6px; text-align: center; }
 #err:empty { display: none; }
 </style>
 <link rel="stylesheet" id="theme">
@@ -172,6 +213,9 @@ textarea::placeholder { color: var(--muted); }
     <span class="dot" id="hdot"></span>
     <span class="chip" id="hchip">No agent</span>
     <span class="sp"></span>
+    <div class="themesw" id="themesw" role="group" aria-label="Theme">
+      <button data-mode="auto" title="Terminal theme">Auto</button><button data-mode="dark" title="Dark theme">Dark</button><button data-mode="light" title="Light theme">Light</button>
+    </div>
     <button class="iconbtn" id="term" title="Show the terminal">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>Terminal
     </button>
@@ -200,7 +244,11 @@ textarea::placeholder { color: var(--muted); }
           <button class="round" id="send" title="Send (Enter)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
         </div>
       </div>
-      <div id="status"></div>
+      <div class="statusrow">
+        <div id="status"></div>
+        <button id="gear" title="Status bar settings" aria-haspopup="dialog" aria-expanded="false" aria-controls="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <div id="settings" role="dialog" aria-label="Status bar settings" tabindex="-1" hidden></div>
+      </div>
       <div id="err"></div>
     </div>
   </footer>
@@ -516,6 +564,8 @@ function renderStatus({ mode, chips, error }) {
     : `<span class="seg builtin ${c.name}${c.name === "status" ? " " + esc(c.text) : ""}">${esc(c.text)}</span>`).join("");
   configError = error || "";
   renderErr();
+  screenChips = chips.filter((c) => c.type === "screen");
+  if (!$("settings").hidden) renderChips();
 }
 
 // Keep the draft on the server, so it survives view switches and reloads.
@@ -572,7 +622,152 @@ function applySettings(s) {
   $("send").title = `Send (${sendKey === "enter" ? "Enter" : "Ctrl+Enter"})`;
   voice = s.voice;
   renderVoice();
+  for (const b of $("themesw").children) b.setAttribute("aria-pressed", String(b.dataset.mode === s.themeMode));
+  cfg = { status: s.status, error: s.error };
+  if (!$("settings").hidden) renderSettings();
 }
+$("themesw").addEventListener("click", (e) => {
+  const mode = e.target.closest("button")?.dataset.mode;
+  if (mode) api("/api/config", { table: "theme", key: "mode", value: mode }).then(() => showErr(), showErr);
+});
+// Status bar settings popover. It edits [status] of config.toml: one key per
+// POST /api/config, at once; the status bar is the live preview. cfg holds the
+// strings as written, from the server. typed and errors keep the user's text
+// and the server's refusal per field ("hide:2", "items:new"), so a bad value
+// stays in its field.
+let cfg = { status: { mode: true, hide: [], items: ["*"], builtins: [] }, error: null };
+let screenChips = [];
+let typed = {}, errors = {}, focusNext = null, added = null;
+const SVG = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const PICON = { up: SVG('<path d="m18 15-6-6-6 6"/>'), down: SVG('<path d="m6 9 6 6 6-6"/>'), remove: SVG('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>') };
+const ferr = (f) => (errors[f] ? `<div class="ferr" role="alert">${esc(errors[f])}</div>` : "");
+const field = (f, value, label, placeholder = "/regex/") =>
+  `<input type="text" data-f="${f}" data-id="${f}" value="${esc(typed[f] ?? value)}" aria-label="${esc(label)}" placeholder="${placeholder}" spellcheck="false" autocomplete="off"${errors[f] ? ' class="bad" aria-invalid="true"' : ""}>`;
+const ibtn = (act, key, i, title, off) => `<button class="ib" data-act="${act}" data-key="${key}" data-i="${i}" data-id="${key}:${i}:${act}" title="${title}" aria-label="${title}"${off ? " disabled" : ""}>${PICON[act]}</button>`;
+
+function renderSettings() {
+  const box = $("settings");
+  const active = document.activeElement, inside = box.contains(active), had = inside && active.dataset.id;
+  const sel = inside && active.dataset.f ? [active.selectionStart, active.selectionEnd] : null;
+  const { status: st, error } = cfg;
+  const items = st.items.map((v, i) => `<li>${v.startsWith("/") ? field(`items:${i}`, v, `Item ${i + 1} regex`) : `<span class="nm">${esc(v)}</span><span class="ds">${v === "*" ? "other screen chips" : "built-in item"}</span>`}` +
+    ibtn("up", "items", i, "Move up", i === 0) + ibtn("down", "items", i, "Move down", i === st.items.length - 1) + ibtn("remove", "items", i, "Remove") + `</li>${ferr(`items:${i}`)}`).join("");
+  const missing = [...st.builtins, "*"].filter((b) => !st.items.includes(b));
+  const hide = st.hide.map((v, i) => `<li${added === i ? ' class="added"' : ""}>${field(`hide:${i}`, v, `Hide regex ${i + 1}`)}${ibtn("remove", "hide", i, "Remove")}</li>${ferr(`hide:${i}`)}`).join("");
+  box.innerHTML =
+    `<div class="ph"><span class="pt">Status bar</span><button class="ib" data-act="close" data-id="close" title="Close (Esc)" aria-label="Close">${PICON.remove}</button></div>` +
+    (error ? `<div class="perr" role="alert">The status bar uses the defaults until you fix the file by hand. ${esc(error)}</div>` :
+    `<label class="check"><input type="checkbox" data-act="mode" data-id="mode"${st.mode ? " checked" : ""}> Show the mode pill</label>${ferr("mode")}` +
+    `<h3>Chips, in order</h3><ol>${items || '<li class="hint">No chips show.</li>'}</ol>` +
+    (missing.length ? `<div class="add">${missing.map((b) => `<button class="tb" data-act="add-name" data-v="${esc(b)}" data-id="add:${esc(b)}" title="Add ${b === "*" ? "the other screen chips" : `the built-in item ${esc(b)}`}">+ ${esc(b)}</button>`).join("")}</div>` : "") +
+    `<div class="new">${field("items:new", "", "New item regex", "/regex/ of chips to place here")}<button class="tb" data-act="add" data-key="items" data-id="items:add">Add</button></div>${ferr("items:new")}` +
+    `<h3>Hidden chips</h3><ol>${hide || '<li class="hint">No chips are hidden.</li>'}</ol>` +
+    (added !== null && st.hide[added] !== undefined ? `<div class="note">Added <code>${esc(st.hide[added])}</code>. Edit it above.</div>` : "") +
+    `<div class="new">${field("hide:new", "", "New hide regex", "/regex/ of chips to hide")}<button class="tb" data-act="add" data-key="hide" data-id="hide:add">Hide</button></div>${ferr("hide:new")}` +
+    `<h3>Hide a chip that shows now</h3><div class="chips" id="pchips"></div>` + ferr("chip"));
+  renderChips();
+  // The rebuild drops the focus: put it back on the same control, or the one that the action names.
+  const target = (focusNext && box.querySelector(`[data-id="${CSS.escape(focusNext)}"]`)) || (had && box.querySelector(`[data-id="${CSS.escape(had)}"]`));
+  if (target) target.focus();
+  else if (inside) box.focus();
+  if (target && sel && target.dataset.id === had && !focusNext) target.setSelectionRange(...sel);
+  focusNext = null;
+}
+function renderChips() {
+  const box = $("pchips");
+  if (!box) return;
+  const had = box.contains(document.activeElement) && document.activeElement.dataset.id;
+  box.innerHTML = screenChips.map((c, i) => `<button class="tb" data-act="hide-chip" data-i="${i}" data-id="chip:${i}" title="Hide: add ${esc(c.hide)}" aria-label="Hide ${esc(c.text)}">${esc(c.text)}</button>`).join("") ||
+    '<span class="hint">No screen chips show.</span>';
+  if (had) (box.querySelector(`[data-id="${had}"]`) || $("settings")).focus();
+}
+
+// Write one key. f is the field that gets a refusal; focus names the control to focus after.
+async function writeStatus(key, value, f, focus) {
+  if (cfg.error) return;
+  try {
+    await api("/api/config", { table: "status", key, value });
+    cfg.status = { ...cfg.status, [key]: value };
+    for (const k of new Set([...Object.keys(typed), ...Object.keys(errors)]))
+      if (k === f || (k.startsWith(key + ":") && !k.endsWith(":new"))) delete typed[k], delete errors[k];
+    if (f !== "chip") added = null;
+    focusNext = focus;
+  } catch (e) {
+    errors[f] = e.message || String(e);
+    if (f === "chip") added = null;
+    focusNext = f === "chip" ? null : f;
+  }
+  renderSettings();
+}
+function commitField(el) {
+  const [key, at] = el.dataset.f.split(":");
+  const list = [...cfg.status[key]];
+  if (at === "new") {
+    if (el.value.trim()) writeStatus(key, [...list, el.value], el.dataset.f, el.dataset.f);
+  } else if (el.value !== list[at]) {
+    list[at] = el.value;
+    writeStatus(key, list, el.dataset.f, el.dataset.f);
+  }
+}
+// Hide a chip that shows now: add its regex (digits made general), and focus it so the user can edit it.
+function hideChip(chip) {
+  const i = cfg.status.hide.indexOf(chip.hide);
+  added = i < 0 ? cfg.status.hide.length : i;
+  if (i < 0) return writeStatus("hide", [...cfg.status.hide, chip.hide], "chip", `hide:${added}`);
+  focusNext = `hide:${i}`;
+  renderSettings();
+}
+$("settings").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b || b.disabled) return;
+  const { act, key } = b.dataset, i = Number(b.dataset.i);
+  const list = key ? [...cfg.status[key]] : [];
+  if (act === "close") closeSettings();
+  else if (act === "mode") writeStatus("mode", b.checked, "mode", "mode");
+  else if (act === "add-name") writeStatus("items", [...cfg.status.items, b.dataset.v], "items:new", "items:new");
+  else if (act === "add") commitField($("settings").querySelector(`[data-f="${key}:new"]`));
+  else if (act === "hide-chip") hideChip(screenChips[i]);
+  else if (act === "remove") { list.splice(i, 1); writeStatus(key, list, `${key}:${i}`, list.length ? `${key}:${Math.min(i, list.length - 1)}:remove` : `${key}:new`); }
+  else if (act === "up" || act === "down") {
+    const j = act === "up" ? i - 1 : i + 1;
+    [list[i], list[j]] = [list[j], list[i]];
+    // At the end of the list the button in that direction is disabled: focus the other one.
+    writeStatus(key, list, `${key}:${i}`, `${key}:${j}:${j === 0 ? "down" : j === list.length - 1 ? "up" : act}`);
+  }
+});
+$("settings").addEventListener("input", (e) => { if (e.target.dataset.f) typed[e.target.dataset.f] = e.target.value; });
+// An edit of a listed regex is written when the field loses focus; a new one only with Enter or its button.
+$("settings").addEventListener("change", (e) => { if (e.target.dataset.f && !e.target.dataset.f.endsWith(":new")) commitField(e.target); });
+// The popover keeps its keys: none reach the agent (Shift+Tab, Esc, Enter, answer keys).
+$("settings").addEventListener("keydown", (e) => {
+  e.stopPropagation();
+  if (e.isComposing) return;
+  if (e.key === "Escape") { e.preventDefault(); closeSettings(); }
+  else if (e.key === "Enter" && e.target.dataset.f) { e.preventDefault(); commitField(e.target); }
+  else if (e.key === "Tab") {
+    const all = [...$("settings").querySelectorAll("input:not(:disabled), button:not(:disabled)")];
+    const at = all.indexOf(document.activeElement);
+    if (e.shiftKey ? at <= 0 : at === all.length - 1) { e.preventDefault(); all.at(e.shiftKey ? -1 : 0).focus(); }
+  }
+});
+function openSettings() {
+  typed = {}; errors = {}; added = null;
+  $("settings").hidden = false;
+  $("gear").setAttribute("aria-expanded", "true");
+  focusNext = cfg.error ? "close" : "mode";
+  renderSettings();
+}
+function closeSettings() {
+  $("settings").hidden = true;
+  $("gear").setAttribute("aria-expanded", "false");
+  $("input").focus();
+}
+$("gear").addEventListener("click", () => ($("settings").hidden ? openSettings() : closeSettings()));
+// On click, not mousedown: a mousedown outside would move the focus after closeSettings put it in the composer.
+// The path, not the target: a click inside can rebuild the popover and detach its target.
+document.addEventListener("click", (e) => {
+  if (!$("settings").hidden && !e.composedPath().some((el) => el.id === "settings" || el.id === "gear")) closeSettings();
+});
 
 // Dictation with the system tool. The tool records and transcribes on this
 // machine; the server adds the text to the draft, which comes back as draft-set.
