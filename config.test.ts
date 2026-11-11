@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { loadConfig, pageSettings } from "./config.ts";
+import { loadConfig, pageSettings, updateConfig } from "./config.ts";
 
 describe("loadConfig", () => {
   test("gives the defaults when the file is missing", () => {
@@ -7,7 +7,7 @@ describe("loadConfig", () => {
     expect(c.error).toBeNull();
     expect(c.input).toEqual({ sendKey: "enter" });
     expect(c.status.mode).toBe(true);
-    expect(pageSettings(c)).toEqual({ sendKey: "enter" });
+    expect(pageSettings(c)).toEqual({ sendKey: "enter", themeMode: "auto" });
   });
 
   test("gives the defaults for an empty file", () => {
@@ -15,8 +15,8 @@ describe("loadConfig", () => {
   });
 
   test("reads send_key from [input]", () => {
-    expect(pageSettings(loadConfig('[input]\nsend_key = "ctrl-enter"'))).toEqual({ sendKey: "ctrl-enter" });
-    expect(pageSettings(loadConfig('[input]\nsend_key = "enter"'))).toEqual({ sendKey: "enter" });
+    expect(pageSettings(loadConfig('[input]\nsend_key = "ctrl-enter"'))).toEqual({ sendKey: "ctrl-enter", themeMode: "auto" });
+    expect(pageSettings(loadConfig('[input]\nsend_key = "enter"'))).toEqual({ sendKey: "enter", themeMode: "auto" });
   });
 
   test("reads the tables independently", () => {
@@ -51,7 +51,7 @@ describe("loadConfig", () => {
   });
 
   test("reports an unknown table", () => {
-    expectDefaults("[colors]\nbg = 3", /unknown table colors \(use \[status\] or \[input\] or \[font\]\)/);
+    expectDefaults("[colors]\nbg = 3", /unknown table colors \(use \[status\] or \[input\] or \[font\] or \[theme\]\)/);
   });
 
   test("reads [font] next to the other tables", () => {
@@ -84,5 +84,43 @@ describe("loadConfig", () => {
   test("returns the same object for the same text", () => {
     const text = '[input]\nsend_key = "ctrl-enter"';
     expect(loadConfig(text)).toBe(loadConfig(text));
+  });
+});
+
+describe("theme mode", () => {
+  test("reads mode from [theme]", () => {
+    expect(loadConfig(null).theme).toEqual({ mode: "auto" });
+    expect(pageSettings(loadConfig('[theme]\nmode = "light"')).themeMode).toBe("light");
+  });
+
+  test("reports a bad mode", () => {
+    expect(loadConfig('[theme]\nmode = "sepia"').error).toMatch(/theme\.mode must be "auto", "dark" or "light"/);
+    expect(loadConfig("[theme]\nname = 1").error).toMatch(/unknown key theme\.name/);
+  });
+});
+
+describe("updateConfig", () => {
+  test("sets a key and keeps the rest", () => {
+    const text = '# mine\n[input]\nsend_key = "enter"\n';
+    expect(updateConfig(text, "theme", "mode", "dark")).toBe(`${text}\n[theme]\nmode = "dark"\n`);
+  });
+
+  test("makes the file from nothing", () => {
+    expect(updateConfig(null, "theme", "mode", "light")).toBe('[theme]\nmode = "light"\n');
+  });
+
+  test("refuses an unknown table, an unknown key and a bad value", () => {
+    expect(() => updateConfig("", "colors", "mode", "dark")).toThrow(/unknown table colors/);
+    expect(() => updateConfig("", "theme", "name", "dark")).toThrow(/unknown key theme\.name/);
+    expect(() => updateConfig("", "theme", "mode", "sepia")).toThrow(/theme\.mode must be/);
+    expect(() => updateConfig("", "font", "size", 99)).toThrow(/font\.size/);
+  });
+
+  test("refuses a write to a file that has an error", () => {
+    expect(() => updateConfig("[input]\nsend_key = 1", "theme", "mode", "dark")).toThrow(/input\.send_key/);
+  });
+
+  test("takes list values for [status]", () => {
+    expect(updateConfig('[status]\nmode = true\n', "status", "hide", ["/x/"])).toBe('[status]\nmode = true\nhide = ["/x/"]\n');
   });
 });

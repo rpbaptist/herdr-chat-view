@@ -6,9 +6,11 @@
 <title>herdr chat</title>
 <style>
 :root {
-  /* Fallback colors. /theme.css overrides the base colors with the Omarchy terminal theme. */
-  --bg: #faf9f5; --fg: #29261b; --muted: #7d7869; --accent: #c96442;
-  --ok: #2f9e5b; --warn: #c98a12; --err: #c8443a;
+  /* Fallback colors, light then dark. color-scheme picks one: both by default (the browser setting),
+     or one when /theme.css sets it for the theme mode. /theme.css overrides the base colors with a terminal theme. */
+  color-scheme: light dark;
+  --bg: light-dark(#faf9f5, #262624); --fg: light-dark(#29261b, #ece9e1); --muted: light-dark(#7d7869, #9c978a);
+  --accent: light-dark(#c96442, #d97757); --ok: light-dark(#2f9e5b, #5fc58a); --warn: light-dark(#c98a12, #e0b04c); --err: light-dark(#c8443a, #ef6b5f);
   --surface: color-mix(in srgb, var(--fg) 4%, var(--bg));
   --raised: color-mix(in srgb, var(--fg) 7%, var(--bg));
   --line: color-mix(in srgb, var(--fg) 13%, var(--bg));
@@ -26,9 +28,6 @@
   --done: var(--c14, #5fa38a);
   --idle: var(--c10, var(--ok));
 }
-@media (prefers-color-scheme: dark) {
-  :root { --bg: #262624; --fg: #ece9e1; --muted: #9c978a; --accent: #d97757; --ok: #5fc58a; --warn: #e0b04c; --err: #ef6b5f; }
-}
 ::selection { background: var(--sel-bg, var(--accent)); color: var(--sel-fg, var(--bg)); }
 * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 html, body { height: 100%; margin: 0; }
@@ -44,6 +43,11 @@ header .chip { font-size: calc(var(--fs) * 12 / 15); color: var(--muted); displa
 header .sp { flex: 1; }
 .iconbtn { display: inline-flex; align-items: center; gap: 6px; font-size: calc(var(--fs) * 13 / 15); color: var(--soft); padding: 6px 10px; border-radius: 8px; }
 .iconbtn:hover { background: var(--raised); color: var(--fg); }
+.themesw { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--raised); }
+.themesw button { font-size: calc(var(--fs) * 12 / 15); line-height: 1.4; color: var(--soft); padding: 3px 10px; border-radius: 7px; }
+.themesw button:hover { color: var(--fg); }
+.themesw button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 0 0 1px var(--line); }
+.themesw button:focus-visible, .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.working { background: var(--working); }
 .dot.working.dim { opacity: .3; }
@@ -166,6 +170,9 @@ textarea::placeholder { color: var(--muted); }
     <span class="dot" id="hdot"></span>
     <span class="chip" id="hchip">No agent</span>
     <span class="sp"></span>
+    <div class="themesw" id="themesw" role="group" aria-label="Theme">
+      <button data-mode="auto" title="Terminal theme">Auto</button><button data-mode="dark" title="Dark theme">Dark</button><button data-mode="light" title="Light theme">Light</button>
+    </div>
     <button class="iconbtn" id="term" title="Show the terminal">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>Terminal
     </button>
@@ -558,7 +565,12 @@ let sendKey = "enter";
 function applySettings(s) {
   sendKey = s.sendKey;
   $("send").title = `Send (${sendKey === "enter" ? "Enter" : "Ctrl+Enter"})`;
+  for (const b of $("themesw").children) b.setAttribute("aria-pressed", String(b.dataset.mode === s.themeMode));
 }
+$("themesw").addEventListener("click", (e) => {
+  const mode = e.target.closest("button")?.dataset.mode;
+  if (mode) api("/api/config", { table: "theme", key: "mode", value: mode }).then(() => showErr(), showErr);
+});
 const sendsMessage = (e) => e.key === "Enter" && !e.isComposing && (sendKey === "enter" ? !e.shiftKey : e.ctrlKey || e.metaKey);
 $("input").addEventListener("keydown", (e) => {
   if (completeKey(e)) return;
