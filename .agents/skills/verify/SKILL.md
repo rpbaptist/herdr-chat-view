@@ -12,12 +12,12 @@ The surface is the chat page (`index.html`) that the chat pane shows next to an 
 3. It runs the **real toggle action** from the checkout under test. This opens the chat pane (pixel) and starts the chat server.
 4. It opens the **same URL** that the chat pane loads in headless Chromium (Playwright). It drives the page through its stable ids and observes side effects through herdr and the transcript.
 
-All paths below are relative to this skill directory: `.claude/skills/verify/`.
+Run the commands below from the repository root. The skill lives in `.agents/skills/verify/`. `.claude/skills/verify` is a symlink to it for Claude Code.
 
 ## Setup (one time per machine)
 
 ```bash
-cd .claude/skills/verify && bun install        # playwright-core only; uses the system Chromium
+cd .agents/skills/verify && bun install        # playwright-core only; uses the system Chromium
 ```
 
 The skill needs these on `PATH`: `herdr` (0.9.5 or later), `bun`, `jq`, `curl`, and `/usr/bin/chromium` (set `CHROMIUM=<path>` to use another one). The repository root must have `node_modules` with pixel installed. The first chat pane installs it.
@@ -25,7 +25,7 @@ The skill needs these on `PATH`: `herdr` (0.9.5 or later), `bun`, `jq`, `curl`, 
 ## Launch
 
 ```bash
-.claude/skills/verify/scripts/up.sh [checkout-dir]
+.agents/skills/verify/scripts/up.sh [checkout-dir]
 ```
 
 - `checkout-dir` defaults to the repository that holds this skill. Give a worktree path to verify that worktree.
@@ -45,7 +45,7 @@ herdr agent get "$AGENT_PANE"
 Run this first, and run it again when something looks wrong. It is read-only and exits 0 only if all checks pass.
 
 ```bash
-.claude/skills/verify/scripts/doctor.sh <run-dir>
+.agents/skills/verify/scripts/doctor.sh <run-dir>
 ```
 
 It checks these items: the session answers; the agent pane is `claude` with this run's session ID; the chat pane exists; the transcript exists; the server PID runs `<checkout>/herdr-chat.ts serve`; the state directory belongs to this run; `/health` answers; and the served page is byte-equal to `<checkout>/index.html`. The last check finds a stale server that runs old code.
@@ -53,7 +53,7 @@ It checks these items: the session answers; the agent pane is `claude` with this
 ## Drive
 
 ```bash
-bun .claude/skills/verify/scripts/page.ts <run-dir> <journey.ts> [args...]
+bun .agents/skills/verify/scripts/page.ts <run-dir> <journey.ts> [args...]
 ```
 
 A journey is a TypeScript file that exports `default async (j: Journey) => {}`. Throw an error to fail the journey. `page.ts` opens `URL` and then calls the journey with these helpers:
@@ -93,7 +93,7 @@ Proof standards:
 ## Cleanup
 
 ```bash
-.claude/skills/verify/scripts/down.sh <run-dir>
+.agents/skills/verify/scripts/down.sh <run-dir>
 ```
 
 The script stops only what `up.sh` started:
