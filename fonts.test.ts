@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fontCss, omarchyFamily, parseFont } from "./fonts.ts";
+import { fontCss, parseFont } from "./fonts.ts";
 
 const DEFAULT = parseFont({});
 const vars = (css: string) => Object.fromEntries([...css.matchAll(/--([\w-]+): ([^;]+);/g)].map((m) => [m[1], m[2]]));
@@ -31,18 +31,14 @@ describe("parseFont", () => {
 });
 
 describe("fontCss", () => {
-  test("gives today's stack and sizes with no config and no Omarchy font", () => {
+  test("gives the default stacks and sizes with no config", () => {
     expect(vars(fontCss(DEFAULT))).toEqual({
       sans: '"Inter", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif', mono: "monospace", fs: "15px", ms: "13px",
     });
   });
 
-  test("uses the Omarchy font for mono, with monospace as the last fallback", () => {
-    expect(vars(fontCss(DEFAULT, omarchyFamily("JetBrainsMono Nerd Font\n"))).mono).toBe('"JetBrainsMono Nerd Font", monospace');
-  });
-
-  test("a configured mono font replaces the Omarchy font", () => {
-    expect(vars(fontCss(parseFont({ mono: "Fira Code" }), ["JetBrainsMono Nerd Font"])).mono).toBe('"Fira Code", monospace');
+  test("a configured mono font ends with monospace", () => {
+    expect(vars(fontCss(parseFont({ mono: "Fira Code" }))).mono).toBe('"Fira Code", monospace');
   });
 
   test("sans ends with sans-serif, and generic names stay unquoted", () => {
@@ -51,7 +47,7 @@ describe("fontCss", () => {
   });
 
   test('sans = "terminal" uses the mono stack', () => {
-    const v = vars(fontCss(parseFont({ sans: "terminal" }), ["JetBrainsMono Nerd Font"]));
+    const v = vars(fontCss(parseFont({ sans: "terminal", mono: "JetBrainsMono Nerd Font" })));
     expect(v.sans).toBe(v.mono);
   });
 
@@ -65,13 +61,5 @@ describe("fontCss", () => {
     const css = fontCss(parseFont({ sans: "a b", mono: "c_d.e+f-g" }));
     expect(css.match(/[{}]/g)).toHaveLength(2);
     expect(css.match(/;/g)).toHaveLength(4);
-  });
-});
-
-describe("omarchyFamily", () => {
-  test("keeps a family name and drops anything else", () => {
-    expect(omarchyFamily("CaskaydiaMono Nerd Font\n")).toEqual(["CaskaydiaMono Nerd Font"]);
-    expect(omarchyFamily("")).toEqual([]);
-    expect(omarchyFamily("bad; value")).toEqual([]);
   });
 });

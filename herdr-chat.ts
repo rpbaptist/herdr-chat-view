@@ -4,14 +4,14 @@
 //   bun herdr-chat.ts close    close the chat pane of the focused agent
 //   bun herdr-chat.ts restore  startup hook: clean up chat panes that a herdr restart left behind
 //   bun herdr-chat.ts serve    run the local chat server (started by toggle)
-import { existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { inputText } from "./screen.ts";
 import { loadConfig, pageSettings, updateConfig } from "./config.ts";
 import { statusBar, usesBranch } from "./status.ts";
 import { themeStyle } from "./theme.ts";
-import { fontCss, omarchyFamily } from "./fonts.ts";
+import { fontCss } from "./fonts.ts";
 import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
 import { agentOf, transcriptPath } from "./agents.ts";
@@ -26,7 +26,6 @@ const sessionKey = Bun.hash(process.env.HERDR_SOCKET_PATH ?? "default").toString
 const stateDir = join(process.env.XDG_RUNTIME_DIR ?? tmpdir(), "herdr-chat", sessionKey);
 const serverFile = join(stateDir, "server.json");
 const panesFile = join(stateDir, "panes.json");
-const themeFile = join(process.env.XDG_STATE_HOME ?? join(homedir(), ".local/state"), "omarchy/current/theme/colors.toml");
 mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 
 // ---------- herdr CLI ----------
@@ -278,20 +277,13 @@ function readConfig(path: string | null): string | null {
   }
 }
 
-// Read-only: the herdr config, and the colors.toml of an Omarchy theme. A null name is the active theme.
-// The theme directory is where `omarchy theme dir` looks: the user's copy first.
-const herdrConfigFile = process.env.HERDR_CONFIG_PATH ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "herdr/config.toml");
-const readText = (path: string): string | null => {
+// Read-only: the text of a colors file from [theme], with `~/` as the home directory.
+function themeColors(path: string): string | null {
   try {
-    return readFileSync(path, "utf8");
+    return readFileSync(path.startsWith("~/") ? join(homedir(), path.slice(2)) : path, "utf8");
   } catch {
     return null;
   }
-};
-function themeColors(name: string | null): string | null {
-  if (name === null) return readText(themeFile);
-  const user = join(homedir(), ".config/omarchy/themes", name);
-  return readText(join(existsSync(user) ? user : join(process.env.OMARCHY_PATH ?? "/usr/share/omarchy", "themes", name), "colors.toml"));
 }
 
 // The config file text changed to set one key. The text is checked before it is written, and written in one step.
@@ -304,17 +296,6 @@ function writeConfigKey(path: string, table: string, key: string, value: unknown
   return text;
 }
 
-// The Omarchy terminal font, read once at server start. Empty when omarchy is missing or fails.
-async function omarchyFont(): Promise<string[]> {
-  try {
-    const proc = Bun.spawn(["omarchy", "font", "current"], { stdout: "pipe", stderr: "ignore", stdin: "ignore", timeout: 1500 });
-    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-    return code === 0 ? omarchyFamily(out) : [];
-  } catch {
-    return [];
-  }
-}
-
 async function serve() {
   // Keep port and token across restarts, so open chat panes reconnect.
   const prev = readJson<ServerInfo | null>(serverFile, null);
@@ -324,12 +305,12 @@ async function serve() {
   let agents: Agent[] = [];
   let agentsJson = "";
   let lastActive = Date.now();
-  const [configFile, omarchy] = await Promise.all([configPath(), omarchyFont()]);
+  const configFile = await configPath();
   let config = readConfig(configFile);
   // The terminal colors, and the fonts and sizes from config.toml.
   const readStyle = () => {
     const { theme, font } = loadConfig(config);
-    return `${themeStyle(theme.mode, readText(herdrConfigFile), themeColors)}\n${fontCss(font, omarchy)}`;
+    return `${themeStyle(theme, themeColors)}\n${fontCss(font)}`;
   };
   let theme = readStyle();
   // The page settings from config.toml, sent when a page connects and when a value changes.

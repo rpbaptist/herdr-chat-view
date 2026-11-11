@@ -120,7 +120,7 @@ describe("loadConfig", () => {
 
 describe("theme mode", () => {
   test("reads mode from [theme]", () => {
-    expect(loadConfig(null).theme).toEqual({ mode: "auto" });
+    expect(loadConfig(null).theme).toEqual({ mode: "auto", colors: null, dark_colors: null, light_colors: null });
     expect(settings('[theme]\nmode = "light"').themeMode).toBe("light");
   });
 

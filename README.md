@@ -11,7 +11,7 @@ next to its terminal. It is for local use only. It is not a herdr replacement.
 - The chat reads the agent's own transcript (Claude Code, Codex) and sends
   messages back with `herdr agent prompt`. Other agents show their screen.
 - The page is drawn in the pane with [pixel](https://pixelgui.com), so there is
-  no browser toolbar. Colors follow the active Omarchy terminal theme.
+  no browser toolbar. Colors come from a terminal colors file that you name.
 - Shift+Tab cycles the agent's mode, Esc interrupts. The agent's status line
   shows under the message box. An optional config file controls it.
 - A draft moves with you: from the chat into Claude's input box, and back.
@@ -59,10 +59,13 @@ send_key = "enter"               # "enter" (default) or "ctrl-enter"
 
 [theme]
 mode = "auto"                    # "auto" (default), "dark" or "light"
+colors = "~/.config/herdr-chat/colors.toml"            # colors for auto (and dark without dark_colors)
+dark_colors = "~/.config/herdr-chat/dark.toml"         # colors for dark
+light_colors = "~/.config/herdr-chat/light.toml"       # colors for light
 
 [font]
 sans = "Inter, Helvetica"        # text font; "terminal" = use the mono font
-mono = "JetBrainsMono Nerd Font" # code and chip font; default: the Omarchy font
+mono = "JetBrainsMono Nerd Font" # code and chip font; default: monospace
 size = 15                        # text size in px (8 to 40)
 mono_size = 13                   # code size in px (8 to 40)
 
@@ -106,20 +109,32 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
 
 - `theme.mode` (default `"auto"`) sets the colors. The control at the top right
   of the page (Auto, Dark, Light) writes it, and so does a hand edit; every open
-  page follows. `auto` shows the active Omarchy theme, as the terminal does. It
-  does not follow the light or dark setting of the host. `dark` shows the Omarchy
-  theme that `dark_name` names in the `[theme]` table of herdr's `config.toml`,
-  else the active theme, else the built-in dark colors. `light` shows the theme
-  that `light_name` names, else the built-in light colors. Themes are found as
-  `omarchy theme dir` finds them. herdr's config and the theme files are only
-  read, every 2 seconds. The page control writes the file with a text edit that
-  keeps all other text and comments, and refuses a value that gives a config
-  error.
+  page follows. `auto` shows the `theme.colors` file. It does not follow the
+  light or dark setting of the host. `dark` shows the `theme.dark_colors` file,
+  else the `theme.colors` file, else the built-in dark colors. `light` shows the
+  `theme.light_colors` file, else the built-in light colors. Without
+  `theme.colors`, `auto` shows the built-in colors. The page control writes the
+  file with a text edit that keeps all other text and comments, and refuses a
+  value that gives a config error.
+- `theme.colors`, `theme.dark_colors` and `theme.light_colors` (default none)
+  are paths to colors files. `~/` is the home directory. A colors file is TOML
+  with `background` and `foreground`, and optionally `color0` to `color15`,
+  `selection_background` and `selection_foreground`, each as `"#rrggbb"`. The
+  server only reads the files, every 2 seconds, so a symlink that your theme
+  switcher changes shows in the open page with no restart.
+
+  ```toml
+  background = "#1a1b26"
+  foreground = "#a9b1d6"
+  color1 = "#f7768e"
+  color2 = "#9ece6a"
+  color3 = "#e0af68"
+  color8 = "#444b6a"
+  ```
 
 - `font.sans` (default `"Inter", "Geist", system-ui, ...`) sets the text font.
   `"terminal"` uses the mono font, so the whole chat uses the terminal font.
-- `font.mono` (default the Omarchy font from `omarchy font current`, read when
-  the server starts; `monospace` when there is none) sets the font for code,
+- `font.mono` (default `monospace`) sets the font for code,
   the status chips and the spinner. Both fonts take one family name or a comma
   separated list. Names may have letters, digits, spaces and `. _ + -` only.
   Each list ends in `sans-serif` or `monospace`, so Nerd Font glyphs still

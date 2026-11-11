@@ -1,14 +1,20 @@
 // The [theme] table of config.toml, and the terminal colors that the page gets as CSS variables.
 export const THEME_MODES = ["auto", "dark", "light"] as const;
 export type ThemeMode = (typeof THEME_MODES)[number];
-export type ThemeConfig = { mode: ThemeMode };
+// The paths of the colors files. A path can start with `~/`.
+export type ThemeConfig = { mode: ThemeMode; colors: string | null; dark_colors: string | null; light_colors: string | null };
+const FILES = ["colors", "dark_colors", "light_colors"] as const;
 
 export function parseTheme(theme: Record<string, unknown>): ThemeConfig {
-  const config: ThemeConfig = { mode: "auto" };
+  const config: ThemeConfig = { mode: "auto", colors: null, dark_colors: null, light_colors: null };
   for (const [key, value] of Object.entries(theme)) {
-    if (key !== "mode") throw new Error(`unknown key theme.${key}`);
-    if (!THEME_MODES.includes(value as ThemeMode)) throw new Error('theme.mode must be "auto", "dark" or "light"');
-    config.mode = value as ThemeMode;
+    if (key === "mode") {
+      if (!THEME_MODES.includes(value as ThemeMode)) throw new Error('theme.mode must be "auto", "dark" or "light"');
+      config.mode = value as ThemeMode;
+    } else if ((FILES as readonly string[]).includes(key)) {
+      if (typeof value !== "string" || !value) throw new Error(`theme.${key} must be a file path`);
+      config[key as (typeof FILES)[number]] = value;
+    } else throw new Error(`unknown key theme.${key}`);
   }
   return config;
 }
@@ -20,7 +26,7 @@ const luminance = (hex: string) => {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 };
 
-// Terminal colors from an Omarchy theme colors.toml, as CSS variables.
+// Terminal colors from a colors file (background, foreground, color0 to color15 as "#hex"), as CSS variables.
 export function themeCss(toml: string): string {
   const c: Record<string, string> = {};
   for (const m of toml.matchAll(/^\s*(\w+)\s*=\s*"(#[0-9a-fA-F]{3,8})"/gm)) c[m[1]] = m[2];
@@ -34,25 +40,12 @@ export function themeCss(toml: string): string {
   return `:root, :root:root { color-scheme: ${luminance(c.background) < 0.5 ? "dark" : "light"}; ${body} }`;
 }
 
-// A theme name from herdr's config is a directory name: no path.
-const NAME = /^[\w][\w.-]*$/;
-
-// The dark_name and light_name of [theme] in herdr's config.toml. Null for a missing or bad value.
-export function herdrThemes(text: string | null): { dark: string | null; light: string | null } {
-  let theme: Record<string, unknown> = {};
-  try {
-    theme = (Bun.TOML.parse(text ?? "") as { theme?: Record<string, unknown> }).theme ?? {};
-  } catch {}
-  const name = (v: unknown) => (typeof v === "string" && NAME.test(v) ? v : null);
-  return { dark: name(theme.dark_name), light: name(theme.light_name) };
-}
-
-// The theme.css text. `colors(name)` gives the colors.toml text of the named Omarchy theme, or null; `colors(null)` is the active theme.
-// Auto is the active theme. Dark and light use the herdr theme of that name, else the built-in palette
-// (dark: the active theme first). The page holds both built-in palettes, and color-scheme picks one.
-export function themeStyle(mode: ThemeMode, herdrConfig: string | null, colors: (name: string | null) => string | null): string {
-  const css = (name: string | null) => themeCss(colors(name) ?? "");
-  if (mode === "auto") return css(null);
-  const names = herdrThemes(herdrConfig);
-  return (names[mode] && css(names[mode])) || (mode === "dark" && css(null)) || `:root:root { color-scheme: ${mode}; }`;
+// The theme.css text. `colors(path)` gives the text of a colors file, or null.
+// Auto is the colors file. Dark and light use their own colors file, else the built-in palette
+// (dark: the colors file first). The page holds both built-in palettes, and color-scheme picks one.
+export function themeStyle(theme: ThemeConfig, colors: (path: string) => string | null): string {
+  const css = (path: string | null) => (path ? themeCss(colors(path) ?? "") : "");
+  const { mode } = theme;
+  if (mode === "auto") return css(theme.colors);
+  return css(theme[`${mode}_colors`]) || (mode === "dark" && css(theme.colors)) || `:root:root { color-scheme: ${mode}; }`;
 }
