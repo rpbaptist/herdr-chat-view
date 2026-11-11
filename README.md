@@ -46,6 +46,7 @@ bun test
 ```
 
 Unit tests cover the transcript parsers, the screen readers and the theme.
+The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 ## Files
 
