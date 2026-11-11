@@ -39,12 +39,22 @@ command = "rpbaptist.herdr-chat-view.toggle"
 description = "Chat view: toggle terminal / chat"
 ```
 
+## Tests
+
+```bash
+bun test
+```
+
+Unit tests cover the transcript parsers, the screen readers and the theme.
+
 ## Files
 
 | File | Purpose |
 | --- | --- |
 | `herdr-chat.ts` | `toggle` and `close` actions, and the local chat server |
 | `transcripts.ts` | Claude Code and Codex transcript parsers |
+| `screen.ts` | Reads Claude's input box and footer from the agent screen |
+| `theme.ts` | Omarchy theme colors as CSS variables |
 | `index.html` | The chat page |
 | `chat-pane.sh`, `chat-view.cjs` | Runs the page in the pane with pixel |
 

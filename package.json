@@ -2,6 +2,9 @@
   "name": "herdr-chat-view",
   "private": true,
   "main": "chat-view.cjs",
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "@zenbu-labs/pixel": "0.2.12",
     "react": "18.3.1"
