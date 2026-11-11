@@ -6,6 +6,8 @@
 import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { footer, inputText } from "./screen.ts";
+import { themeCss } from "./theme.ts";
 import { parsers, transcriptPath, type Item } from "./transcripts.ts";
 
 const PLUGIN_ID = "rpbaptist.herdr-chat-view";
@@ -150,28 +152,8 @@ async function switchView(server: ServerInfo, agent: string, view: "terminal" | 
 
 // ---------- agent input box (Claude Code) ----------
 
-const RULE = /^\s*─{10,}\s*$/;
-const plainText = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\r/g, "");
-
-// The text in Claude's input box: the lines between the last two rules.
-// "" when the box is empty (it then shows a dim placeholder), null when not found.
 async function readInput(agent: string): Promise<string | null> {
-  const screen = String(await herdr(["agent", "read", agent, "--source", "visible", "--format", "ansi"]));
-  const raw = screen.split("\n");
-  const lines = raw.map((l) => plainText(l).replace(/\s+$/, ""));
-  const bottom = lines.findLastIndex((l) => RULE.test(l));
-  const top = lines.slice(0, bottom).findLastIndex((l) => RULE.test(l));
-  if (top < 0 || !/^[❯>]/.test(lines[top + 1] ?? "")) return null;
-  const lead = raw[top + 1].match(/^.*?[❯>][\s\u00a0]*((?:\x1b\[[0-9;]*m)*)/)?.[1] ?? "";
-  if (/\x1b\[2m/.test(lead)) return "";
-  const width = lines[top].trim().length;
-  let text = "";
-  lines.slice(top + 1, bottom).forEach((l, i) => {
-    const part = i === 0 ? l.replace(/^[❯>][\s\u00a0]?/, "") : l.replace(/^ {2}/, "");
-    const prev = lines[top + i];
-    text += i === 0 ? part : (prev.length >= width - 1 ? "" : "\n") + part;
-  });
-  return text.trim() ? text : "";
+  return inputText(String(await herdr(["agent", "read", agent, "--source", "visible", "--format", "ansi"])));
 }
 
 async function close() {
@@ -212,34 +194,12 @@ type Client = {
   status?: string;
 };
 
-// The agent's footer (status line, mode) is the text below the last horizontal rule.
-const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-function footer(screen: string): string[] {
-  const lines = screen.split("\n").map((l) => l.replace(/\r/g, ""));
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (/^\s*─{10,}\s*$/.test(stripAnsi(lines[i]))) return lines.slice(i + 1).filter((l) => stripAnsi(l).trim()).slice(0, 4);
-  }
-  return [];
-}
-
-// Terminal colors from the active Omarchy theme, as CSS variables.
-function themeCss(): string {
-  let toml = "";
+function readTheme(): string {
   try {
-    toml = readFileSync(themeFile, "utf8");
+    return themeCss(readFileSync(themeFile, "utf8"));
   } catch {
     return "";
   }
-  const c: Record<string, string> = {};
-  for (const m of toml.matchAll(/^\s*(\w+)\s*=\s*"(#[0-9a-fA-F]{3,8})"/gm)) c[m[1]] = m[2];
-  if (!c.background || !c.foreground) return "";
-  const vars: Record<string, string | undefined> = {
-    bg: c.background, fg: c.foreground, muted: c.color8, accent: c.color3 ?? c.color11, // herdr themes use the normal yellow as accent
-    ok: c.color2, warn: c.color3, err: c.color1, "sel-bg": c.selection_background, "sel-fg": c.selection_foreground,
-  };
-  for (let i = 0; i < 16; i++) vars[`c${i}`] = c[`color${i}`];
-  const body = Object.entries(vars).filter(([, v]) => v).map(([k, v]) => `--${k}: ${v};`).join(" ");
-  return `:root, :root:root { ${body} }`;
 }
 
 async function serve() {
@@ -251,7 +211,7 @@ async function serve() {
   let agents: Agent[] = [];
   let agentsJson = "";
   let lastActive = Date.now();
-  let theme = themeCss();
+  let theme = readTheme();
   const drafts = new Map<string, string>();
   function setDraft(pane: string, text: string) {
     drafts.set(pane, text);
@@ -376,7 +336,7 @@ async function serve() {
     }
   }, 1000);
   setInterval(() => {
-    const next = themeCss();
+    const next = readTheme();
     if (next === theme) return;
     theme = next;
     for (const c of clients) c.send("theme", theme);
