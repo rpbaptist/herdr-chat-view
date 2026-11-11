@@ -150,6 +150,14 @@ textarea::placeholder { color: var(--muted); }
 .round { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; }
 #send { background: var(--fg); color: var(--bg); }
 #send:disabled { opacity: .35; cursor: default; }
+/* dictation: idle, recording (red pulse), transcribing (spinner) */
+#mic { display: none; color: var(--soft); border: 1px solid var(--line); background: var(--bg); }
+#mic.on { display: inline-flex; }
+#mic:hover:not(:disabled) { color: var(--fg); border-color: var(--soft); }
+#mic:disabled { opacity: .35; cursor: default; }
+#mic.rec { color: var(--bg); background: var(--err); border-color: var(--err); animation: rec 1.4s ease-in-out infinite; }
+#mic.busy svg { display: none; }
+@keyframes rec { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--err) 30%, transparent); } }
 #stop { display: none; background: var(--fg); color: var(--bg); }
 #stop.on { display: inline-flex; }
 #status { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 4px 0; font-size: calc(var(--fs) * 12 / 15); }
@@ -231,6 +239,7 @@ textarea::placeholder { color: var(--muted); }
         <div class="bar">
           <button id="mode" title="Change mode (shift+tab)"><span class="md"></span><span class="ml"></span><span class="extra"></span></button>
           <span class="sp"></span>
+          <button class="round" id="mic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></svg><span class="vs"></span></button>
           <button class="round" id="stop" title="Interrupt (Esc)"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>
           <button class="round" id="send" title="Send (Enter)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button>
         </div>
@@ -431,6 +440,11 @@ function connect() {
   });
   es.addEventListener("theme", loadTheme);
   es.addEventListener("settings", (e) => applySettings(JSON.parse(e.data)));
+  es.addEventListener("voice", (e) => {
+    voiceState = JSON.parse(e.data);
+    if (voiceState.error && voiceState.pane === pane) showErr(voiceState.error);
+    renderVoice();
+  });
   es.addEventListener("status", (e) => renderStatus(JSON.parse(e.data)));
   es.addEventListener("draft-set", (e) => { $("input").value = JSON.parse(e.data); autosize(); updateComplete(); });
   es.addEventListener("draft", (e) => {
@@ -606,6 +620,8 @@ let sendKey = "enter";
 function applySettings(s) {
   sendKey = s.sendKey;
   $("send").title = `Send (${sendKey === "enter" ? "Enter" : "Ctrl+Enter"})`;
+  voice = s.voice;
+  renderVoice();
   for (const b of $("themesw").children) b.setAttribute("aria-pressed", String(b.dataset.mode === s.themeMode));
   cfg = { status: s.status, error: s.error };
   if (!$("settings").hidden) renderSettings();
@@ -752,6 +768,36 @@ $("gear").addEventListener("click", () => ($("settings").hidden ? openSettings()
 document.addEventListener("click", (e) => {
   if (!$("settings").hidden && !e.composedPath().some((el) => el.id === "settings" || el.id === "gear")) closeSettings();
 });
+
+// Dictation with the system tool. The tool records and transcribes on this
+// machine; the server adds the text to the draft, which comes back as draft-set.
+let voice = null; // null: off; { tool }: ready; { tool: null, reason }: no tool
+let voiceState = { state: "idle", pane: null };
+const dictating = () => voiceState.pane === pane && voiceState.state !== "idle";
+function renderVoice() {
+  const b = $("mic"), s = voiceState.state, mine = voiceState.pane === pane, other = s !== "idle" && !mine;
+  const busy = mine && s === "transcribing", spin = b.querySelector(".vs");
+  b.classList.toggle("on", !!voice);
+  b.classList.toggle("rec", mine && s === "recording");
+  b.classList.toggle("busy", busy);
+  spin.className = busy ? "vs spin" : "vs";
+  if (!busy) spin.textContent = "";
+  b.disabled = !voice?.tool || other;
+  b.title = !voice?.tool ? voice?.reason ?? ""
+    : other ? "Dictation runs in another chat"
+    : !mine ? `Dictate (${voice.tool})`
+    : s === "recording" ? "Stop and transcribe (Esc: cancel)" : "Transcribing… (Esc: cancel)";
+}
+async function voiceAction(action) {
+  try { showErr(); await api("/api/voice", { pane, action }); } catch (e) { showErr(e); }
+}
+// Keep the focus in the message box, so typing goes on during and after dictation.
+$("mic").addEventListener("mousedown", (e) => e.preventDefault());
+$("mic").addEventListener("click", () => {
+  $("input").focus();
+  if (voiceState.state === "idle") voiceAction("start");
+  else if (dictating() && voiceState.state === "recording") voiceAction("stop");
+});
 const sendsMessage = (e) => e.key === "Enter" && !e.isComposing && (sendKey === "enter" ? !e.shiftKey : e.ctrlKey || e.metaKey);
 $("input").addEventListener("keydown", (e) => {
   if (completeKey(e)) return;
@@ -770,7 +816,7 @@ function blockedKey(e) {
 document.addEventListener("keydown", (e) => {
   if (e.isComposing) return;
   if (e.key === "Tab" && e.shiftKey) { e.preventDefault(); keys("shift+tab"); return; }
-  if (e.key === "Escape") { e.preventDefault(); keys("esc"); return; }
+  if (e.key === "Escape") { e.preventDefault(); dictating() ? voiceAction("cancel") : keys("esc"); return; }
   if (!e.defaultPrevented) blockedKey(e);
 });
 window.addEventListener("hashchange", () => { pane = decodeURIComponent(location.hash.slice(1)); connect(); });
