@@ -29,6 +29,7 @@ SESSION_ID=$sid
 TRANSCRIPT_DIR=$tdir
 TRANSCRIPT=$transcript
 HERDR_CHAT_CONFIG=$dir/config.toml
+HERDR_CONFIG_PATH=$dir/herdr.toml
 HERDR_CHAT_VOICE_BIN=$dir/voxtype/voxtype
 FAKE_VOXTYPE_DIR=$dir/voxtype
 EOF
@@ -59,12 +60,12 @@ for _ in $(seq 100); do [[ $(agent_line) == "$want" ]] && break; sleep 0.2; done
 [[ $(agent_line) == "$want" ]] || fail "fixture agent in $pane is '$(agent_line)', want '$want'"
 
 # 3. The real toggle action from this checkout: starts the chat server and opens the chat pane.
-#    The server reads the status bar config from the run directory, not from the user's config,
-#    and dictates with a fake voxtype, never with the real microphone.
+#    The server reads the plugin config and the herdr theme from the run directory, not from the
+#    user's config, and dictates with a fake voxtype, never with the real microphone.
 mkdir -p "$dir/voxtype"
 cp "$skill/scripts/fake-voxtype.sh" "$dir/voxtype/voxtype"
 HERDR_CHAT_VOICE_BIN=$dir/voxtype/voxtype FAKE_VOXTYPE_DIR=$dir/voxtype \
-  HERDR_CHAT_CONFIG=$dir/config.toml HERDR_PANE_ID=$pane bun "$checkout/herdr-chat.ts" toggle >"$dir/toggle.out" 2>&1 || fail "toggle: $(cat "$dir/toggle.out")"
+  HERDR_CHAT_CONFIG=$dir/config.toml HERDR_CONFIG_PATH=$dir/herdr.toml HERDR_PANE_ID=$pane bun "$checkout/herdr-chat.ts" toggle >"$dir/toggle.out" 2>&1 || fail "toggle: $(cat "$dir/toggle.out")"
 key=$(bun -e 'console.log(Bun.hash(process.env.HERDR_SOCKET_PATH).toString(36))')
 state=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/herdr-chat/$key
 add STATE_DIR "$state"

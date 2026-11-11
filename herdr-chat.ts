@@ -12,6 +12,7 @@ import { loadConfig, pageSettings, updateConfig } from "./config.ts";
 import { statusBar, usesBranch } from "./status.ts";
 import { themeStyle } from "./theme.ts";
 import { fontCss } from "./fonts.ts";
+import type { TerminalColors } from "./terminal-colors.ts";
 import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
 import { agentOf, transcriptPath } from "./agents.ts";
@@ -26,6 +27,8 @@ const sessionKey = Bun.hash(process.env.HERDR_SOCKET_PATH ?? "default").toString
 const stateDir = join(process.env.XDG_RUNTIME_DIR ?? tmpdir(), "herdr-chat", sessionKey);
 const serverFile = join(stateDir, "server.json");
 const panesFile = join(stateDir, "panes.json");
+// The chat pane writes the terminal colors here when it starts (terminal-colors.ts).
+const terminalColorsFile = join(stateDir, "terminal-colors.json");
 mkdirSync(stateDir, { recursive: true, mode: 0o700 });
 
 // ---------- herdr CLI ----------
@@ -179,7 +182,7 @@ async function toggle() {
     const res = await herdr([
       "plugin", "pane", "open", "--plugin", PLUGIN_ID, "--entrypoint", "chat",
       "--placement", "tab", "--workspace", a.workspace_id!,
-      "--env", `HERDR_CHAT_URL=${url}`, "--no-focus",
+      "--env", `HERDR_CHAT_URL=${url}`, "--env", `HERDR_CHAT_COLORS=${terminalColorsFile}`, "--no-focus",
     ]);
     const pane = res?.plugin_pane?.pane;
     if (!pane?.pane_id) throw new Error(`unexpected plugin pane open result: ${JSON.stringify(res)}`);
@@ -277,14 +280,15 @@ function readConfig(path: string | null): string | null {
   }
 }
 
-// Read-only: the text of a colors file from [theme], with `~/` as the home directory.
-function themeColors(path: string): string | null {
+// Read-only: herdr's config, for its theme.
+const herdrConfigFile = process.env.HERDR_CONFIG_PATH ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "herdr/config.toml");
+const readText = (path: string): string | null => {
   try {
-    return readFileSync(path.startsWith("~/") ? join(homedir(), path.slice(2)) : path, "utf8");
+    return readFileSync(path, "utf8");
   } catch {
     return null;
   }
-}
+};
 
 // The config file text changed to set one key. The text is checked before it is written, and written in one step.
 function writeConfigKey(path: string, table: string, key: string, value: unknown): string {
@@ -310,7 +314,7 @@ async function serve() {
   // The terminal colors, and the fonts and sizes from config.toml.
   const readStyle = () => {
     const { theme, font } = loadConfig(config);
-    return `${themeStyle(theme, themeColors)}\n${fontCss(font)}`;
+    return `${themeStyle(theme.mode, readText(herdrConfigFile), readJson<TerminalColors | null>(terminalColorsFile, null))}\n${fontCss(font)}`;
   };
   let theme = readStyle();
   // The page settings from config.toml, sent when a page connects and when a value changes.

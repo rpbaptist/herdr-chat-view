@@ -1,36 +1,35 @@
 // Feature: theme. The Auto / Dark / Light control in the top bar, and [theme] mode in config.toml.
 // Proves: click or key -> POST /api/config -> config.toml text (other content kept) -> settings and theme
 // events -> computed colors of every open page; a hand edit of the file; and a reload that keeps the choice.
-// The colors files are fixtures in the run directory, named by [theme] colors, dark_colors and light_colors.
+// The herdr config and the terminal colors file are fixtures in the run directory: herdr colors first, terminal colors second.
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { Journey } from "../scripts/page.ts";
 
 const BUILTIN = { dark: "#262624", light: "#faf9f5" };
 const rgb = (hex: string) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
 const read = (path: string) => (existsSync(path) ? readFileSync(path, "utf8") : "");
-const FIXTURES = {
-  colors: { background: "#1d2021", foreground: "#ebdbb2" },
-  dark_colors: { background: "#1a1b26", foreground: "#a9b1d6" },
-  light_colors: { background: "#f9f5d7", foreground: "#282828" },
-};
+const TERMINAL = { fg: "#d0d0d0", bg: "#101418", ansi: Array.from({ length: 16 }, (_, i) => `#20${(i * 16).toString(16).padStart(2, "0")}40`) };
 
 export default async function (j: Journey) {
   const { page, step, until, run } = j;
   const file = run.HERDR_CHAT_CONFIG;
   if (!file) throw new Error("run.env has no HERDR_CHAT_CONFIG; start the run with this checkout's up.sh");
-  const paths = Object.fromEntries(Object.keys(FIXTURES).map((k) => [k, join(dirname(file), `${k}.toml`)])) as Record<keyof typeof FIXTURES, string>;
-  for (const [k, c] of Object.entries(FIXTURES)) writeFileSync(paths[k as keyof typeof FIXTURES], `background = "${c.background}"\nforeground = "${c.foreground}"\n`);
-  const want = { auto: FIXTURES.colors.background, dark: FIXTURES.dark_colors.background, light: FIXTURES.light_colors.background };
-  step(`expected backgrounds: ${JSON.stringify(want)}`);
+  const herdrFile = run.HERDR_CONFIG_PATH;
+  const colorsFile = join(run.STATE_DIR, "terminal-colors.json");
+  if (!herdrFile) throw new Error("run.env has no HERDR_CONFIG_PATH; start the run with this checkout's up.sh");
+  const { THEMES } = await import(join(run.CHECKOUT, "herdr-themes.ts"));
+  const paneColors = read(colorsFile);
+  step(`terminal colors from the chat pane query: ${paneColors || "(none: the headless herdr has no host terminal)"}`);
+  writeFileSync(herdrFile, '[theme]\nname = "gruvbox"\n');
+  const want = { auto: THEMES.gruvbox.panel_bg, dark: THEMES.gruvbox.panel_bg, light: THEMES["gruvbox-light"].panel_bg };
+  step(`herdr theme gruvbox; expected backgrounds: ${JSON.stringify(want)}`);
 
   const pressed = (p = page) => p.evaluate(() => [...document.querySelectorAll("#themesw button")].find((b) => b.getAttribute("aria-pressed") === "true")?.textContent);
   const bg = (p = page) => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const waitMode = (what: string, label: string, color: string | null, p = page) =>
     until(what, async () => (await pressed(p)) === label && (color === null || (await bg(p)) === rgb(color)));
-  const seed =
-    '# my settings\n[status]\nmode = true # keep\n\n[input]\nsend_key = "enter"\n\n[theme]\n' +
-    Object.entries(paths).map(([k, p]) => `${k} = "${p}"\n`).join("");
+  const seed = '# my settings\n[status]\nmode = true # keep\n\n[input]\nsend_key = "enter"\n';
   const fileText = () => read(file);
 
   try {
@@ -47,28 +46,28 @@ export default async function (j: Journey) {
     await second.goto(run.URL);
 
     await waitMode("Auto is marked, terminal colors", "Auto", want.auto);
-    step(`auto: background ${await bg()} is the colors file`);
+    step(`auto: background ${await bg()} is the panel_bg of the herdr theme`);
     await j.shot("auto");
 
     await page.locator('#themesw [data-mode="light"]').click();
     await waitMode("Light is marked and light colors apply", "Light", want.light);
     await waitMode("the second page follows", "Light", want.light, second);
     step(`light: background ${await bg()}, the second page too`);
-    if (fileText() !== `${seed}mode = "light"\n`) throw new Error(`config.toml after Light:\n${fileText()}`);
-    step(`config.toml kept its content and comments and got theme.mode:\n${fileText()}`);
+    if (fileText() !== `${seed}\n[theme]\nmode = "light"\n`) throw new Error(`config.toml after Light:\n${fileText()}`);
+    step(`config.toml kept its content and comments and got [theme]:\n${fileText()}`);
     await page.locator("#status .seg").first().waitFor();
     await j.shot("light");
     await second.screenshot({ path: `${j.out}/second-page-light.png` });
 
     await page.locator('#themesw [data-mode="dark"]').click();
     await waitMode("Dark is marked and dark colors apply", "Dark", want.dark);
-    if (fileText() !== `${seed}mode = "dark"\n`) throw new Error(`config.toml after Dark:\n${fileText()}`);
+    if (fileText() !== `${seed}\n[theme]\nmode = "dark"\n`) throw new Error(`config.toml after Dark:\n${fileText()}`);
     step(`dark: background ${await bg()}; the value is replaced in place`);
     await j.shot("dark");
 
     await page.locator('#themesw [data-mode="auto"]').click();
     await waitMode("Auto again", "Auto", want.auto);
-    if (!fileText().endsWith('mode = "auto"\n')) throw new Error(`config.toml after Auto:\n${fileText()}`);
+    if (!fileText().endsWith('[theme]\nmode = "auto"\n')) throw new Error(`config.toml after Auto:\n${fileText()}`);
 
     await page.locator('#themesw [data-mode="dark"]').focus();
     await page.keyboard.press("Tab");
@@ -105,7 +104,22 @@ export default async function (j: Journey) {
     if (!fileText().includes('mode = "light" # by hand')) throw new Error("a refused write changed the file");
     step(`refused writes: ${JSON.stringify(refused)}; the file is unchanged`);
 
-    // The built-in palettes, as a config without colors files gets them: one copy, picked by color-scheme.
+    // The terminal second: herdr's terminal theme takes the background and the ANSI colors from the terminal colors file.
+    writeFileSync(file, fileText().replace('mode = "light" # by hand', 'mode = "auto"'));
+    writeFileSync(colorsFile, JSON.stringify(TERMINAL));
+    writeFileSync(herdrFile, '[theme]\nname = "terminal"\n');
+    await waitMode("herdr terminal theme takes the terminal background", "Auto", TERMINAL.bg);
+    const c = await page.evaluate(() => [1, 9].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--c${i}`).trim()));
+    if (c[0] !== TERMINAL.ansi[1] || c[1] !== TERMINAL.ansi[9]) throw new Error(`ANSI colors are ${c}, want ${TERMINAL.ansi[1]} and ${TERMINAL.ansi[9]}`);
+    step(`herdr theme terminal: background ${await bg()}, --c1 ${c[0]}, --c9 ${c[1]} from the terminal colors file`);
+    await j.shot("terminal");
+
+    // A hand edit of the herdr theme shows with no reload.
+    writeFileSync(herdrFile, '[theme]\nname = "nord"\n');
+    await waitMode("herdr theme nord", "Auto", THEMES.nord.panel_bg);
+    step(`herdr theme nord: background ${await bg()}`);
+
+    // The built-in palettes, as a page without theme.css gets them: one copy, picked by color-scheme.
     await page.evaluate(() => document.getElementById("theme")!.remove());
     for (const scheme of ["light", "dark"] as const) {
       await page.evaluate((s) => (document.documentElement.style.colorScheme = s), scheme);
@@ -115,6 +129,9 @@ export default async function (j: Journey) {
     }
     await second.close();
   } finally {
-    for (const f of [file, ...Object.values(paths)]) rmSync(f, { force: true });
+    rmSync(file, { force: true });
+    rmSync(herdrFile, { force: true });
+    if (paneColors) writeFileSync(colorsFile, paneColors);
+    else rmSync(colorsFile, { force: true });
   }
 }

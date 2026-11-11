@@ -11,7 +11,8 @@ next to its terminal. It is for local use only. It is not a herdr replacement.
 - The chat reads the agent's own transcript (Claude Code, Codex) and sends
   messages back with `herdr agent prompt`. Other agents show their screen.
 - The page is drawn in the pane with [pixel](https://pixelgui.com), so there is
-  no browser toolbar. Colors come from a terminal colors file that you name.
+  no browser toolbar. Colors come from the herdr theme first, and from the
+  terminal second.
 - Shift+Tab cycles the agent's mode, Esc interrupts. The agent's status line
   shows under the message box. An optional config file controls it.
 - A draft moves with you: from the chat into Claude's input box, and back.
@@ -59,9 +60,6 @@ send_key = "enter"               # "enter" (default) or "ctrl-enter"
 
 [theme]
 mode = "auto"                    # "auto" (default), "dark" or "light"
-colors = "~/.config/herdr-chat/colors.toml"            # colors for auto (and dark without dark_colors)
-dark_colors = "~/.config/herdr-chat/dark.toml"         # colors for dark
-light_colors = "~/.config/herdr-chat/light.toml"       # colors for light
 
 [font]
 sans = "Inter, Helvetica"        # text font; "terminal" = use the mono font
@@ -109,28 +107,27 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
 
 - `theme.mode` (default `"auto"`) sets the colors. The control at the top right
   of the page (Auto, Dark, Light) writes it, and so does a hand edit; every open
-  page follows. `auto` shows the `theme.colors` file. It does not follow the
-  light or dark setting of the host. `dark` shows the `theme.dark_colors` file,
-  else the `theme.colors` file, else the built-in dark colors. `light` shows the
-  `theme.light_colors` file, else the built-in light colors. Without
-  `theme.colors`, `auto` shows the built-in colors. The page control writes the
-  file with a text edit that keeps all other text and comments, and refuses a
-  value that gives a config error.
-- `theme.colors`, `theme.dark_colors` and `theme.light_colors` (default none)
-  are paths to colors files. `~/` is the home directory. A colors file is TOML
-  with `background` and `foreground`, and optionally `color0` to `color15`,
-  `selection_background` and `selection_foreground`, each as `"#rrggbb"`. The
-  server only reads the files, every 2 seconds, so a symlink that your theme
-  switcher changes shows in the open page with no restart.
+  page follows. The page reads the `[theme]` table of herdr's `config.toml`
+  (`HERDR_CONFIG_PATH`, else `~/.config/herdr/config.toml`) the same way herdr
+  does. `auto` shows the theme that herdr shows: `name`, or with `auto_switch`
+  the `dark_name` or `light_name` theme for the terminal background. `dark` and
+  `light` show `dark_name` and `light_name`. When one is not set, herdr's pair
+  of `name` applies (`gruvbox` and `gruvbox-light`, for example).
+  `[theme.custom]`, `[theme.custom.dark]`, `[theme.custom.light]` and
+  `[ui] accent` apply as in herdr. It does not follow the light or dark setting
+  of the host. The page control writes the file with a text edit that keeps all
+  other text and comments, and refuses a value that gives a config error.
 
-  ```toml
-  background = "#1a1b26"
-  foreground = "#a9b1d6"
-  color1 = "#f7768e"
-  color2 = "#9ece6a"
-  color3 = "#e0af68"
-  color8 = "#444b6a"
-  ```
+  The colors come from herdr first and the terminal second. The herdr theme
+  gives the background (`panel_bg`), the text, the muted text, the accent, the
+  state colors and the selection. A herdr color that is an ANSI name, or the
+  terminal default (the `terminal` theme), takes the terminal color. The ANSI
+  colors 0 to 15 of the agent screen come from the terminal only. The chat pane
+  asks the terminal for its colors (OSC 10, 11 and 4) when it opens. In a
+  herdr pane, herdr answers with the colors of the host terminal. A color that
+  neither source gives keeps the built-in color of the page. The server reads
+  herdr's config every 2 seconds, and only reads it. The terminal colors
+  update when a chat pane opens.
 
 - `font.sans` (default `"Inter", "Geist", system-ui, ...`) sets the text font.
   `"terminal"` uses the mono font, so the whole chat uses the terminal font.
