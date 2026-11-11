@@ -10,7 +10,7 @@ next to its terminal. It is for local use only. It is not a herdr replacement.
 - The page is drawn in the pane with [pixel](https://pixelgui.com), so there is
   no browser toolbar. Colors follow the active Omarchy terminal theme.
 - Shift+Tab cycles the agent's mode, Esc interrupts. The agent's status line
-  shows under the message box.
+  shows under the message box. An optional config file controls it.
 - A draft moves with you: from the chat into Claude's input box, and back.
 
 Status: in daily use by the author, not yet published.
@@ -39,13 +39,41 @@ command = "rpbaptist.herdr-chat-view.toggle"
 description = "Chat view: toggle terminal / chat"
 ```
 
+## Configuration
+
+An optional `config.toml` in the plugin config directory
+(`herdr plugin config-dir rpbaptist.herdr-chat-view`) controls the status bar
+under the message box. Without the file, the status bar shows the agent's
+footer as it is. The terms are in [GLOSSARY.md](GLOSSARY.md).
+
+```toml
+[status]
+mode = true                      # show the mode pill in the composer
+hide = ["/\\d+% context/"]       # regexes on plain chip text; screen chips only; runs first
+items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*" = remaining screen chips
+```
+
+- `mode` (default `true`) shows or hides the mode pill.
+- `hide` (default `[]`) removes the screen chips that match a regex. A regex
+  matches the chip text without colors. Write `/pattern/i` to ignore case.
+- `items` (default `["*"]`) sets the order. A regex places all the screen
+  chips that match and are not placed yet. `"*"` places all the other screen
+  chips. A list without `"*"` shows only the listed items. The built-in items
+  are `kind` (agent kind), `cwd` (the working directory, with `~` for home)
+  and `status` (the herdr agent status, in the state color).
+
+The server reads the file every 2 seconds, so open chat pages show a change
+with no restart. If the file has an error, the status bar uses the defaults
+and the page shows the error in one line.
+
 ## Tests
 
 ```bash
 bun test
 ```
 
-Unit tests cover the transcript parsers, the screen readers and the theme.
+Unit tests cover the transcript parsers, the screen readers, the status bar
+model and the theme.
 The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 ## Files
@@ -55,6 +83,7 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | `herdr-chat.ts` | `toggle` and `close` actions, and the local chat server |
 | `transcripts.ts` | Claude Code and Codex transcript parsers |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |
+| `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
 | `theme.ts` | Omarchy theme colors as CSS variables |
 | `index.html` | The chat page |
 | `chat-pane.sh`, `chat-view.cjs` | Runs the page in the pane with pixel |

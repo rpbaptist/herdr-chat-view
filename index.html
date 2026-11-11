@@ -142,6 +142,9 @@ textarea::placeholder { color: var(--muted); }
 #status { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 4px 0; font-size: 12px; }
 #status .seg { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 7px; padding: 2px 8px; white-space: pre; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 #status .seg span { opacity: .9; }
+/* Built-in items: muted, and the status in the herdr state color, as in the header. */
+#status .builtin.working { color: var(--working); } #status .builtin.blocked { color: var(--blocked); }
+#status .builtin.done { color: var(--done); } #status .builtin.idle { color: var(--idle); }
 #status:empty { display: none; }
 #err { color: var(--err); font-size: 12.5px; margin-top: 6px; text-align: center; }
 #err:empty { display: none; }
@@ -416,31 +419,22 @@ function ansi(line) {
   return out;
 }
 
-// The agent's footer: the mode line becomes a pill in the composer, the rest
-// (the status line) becomes small segments under it.
-const MODE = /mode on|accept edits|bypass permissions|plan mode|manual mode/i;
-const plain = (l) => l.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-function firstColor(line) {
-  const m = line.match(/\x1b\[(?:[0-9;]*;)?38;5;(\d+)m/) || line.match(/\x1b\[(3[0-7]|9[0-7])m/);
-  if (!m) return "";
-  const n = Number(m[1]);
-  return xterm(n >= 90 ? n - 82 : n >= 30 && n <= 37 ? n - 30 : n);
-}
-function renderStatus(lines) {
-  const modeLine = lines.find((l) => MODE.test(plain(l)));
+// The status bar model from the server: the mode pill in the composer, the
+// chips under it, and the config error.
+let configError = "", actionError = "";
+function renderStatus({ mode, chips, error }) {
   const pill = $("mode");
-  if (modeLine) {
-    const parts = plain(modeLine).replace(/\(shift\+tab to cycle\)/i, "").split("·").map((t) => t.trim()).filter(Boolean);
-    const label = parts.shift().replace(/^[^\p{L}]+/u, "").replace(/\s+on$/i, "");
-    pill.querySelector(".ml").textContent = label.charAt(0).toUpperCase() + label.slice(1);
-    pill.querySelector(".extra").textContent = parts.length ? "· " + parts.join(" · ") : "";
-    pill.style.setProperty("--mc", firstColor(modeLine) || "var(--muted)");
+  if (mode) {
+    pill.querySelector(".ml").textContent = mode.label;
+    pill.querySelector(".extra").textContent = mode.extra ? "· " + mode.extra : "";
+    pill.style.setProperty("--mc", mode.color === null ? "var(--muted)" : xterm(mode.color));
   }
-  pill.classList.toggle("on", !!modeLine);
-  $("status").innerHTML = lines.filter((l) => l !== modeLine)
-    // Segments are split by wide gaps, or by spaces that sit between color codes.
-    .flatMap((l) => l.split(/\s{2,}|(?:\x1b\[[0-9;]*m)+\s+(?=\x1b\[)/).filter((seg) => plain(seg).trim()))
-    .map((seg) => `<span class="seg">${ansi(seg.trim())}</span>`).join("");
+  pill.classList.toggle("on", !!mode);
+  $("status").innerHTML = chips.map((c) => c.type === "screen"
+    ? `<span class="seg">${ansi(c.ansi)}</span>`
+    : `<span class="seg builtin ${c.name}${c.name === "status" ? " " + esc(c.text) : ""}">${esc(c.text)}</span>`).join("");
+  configError = error || "";
+  renderErr();
 }
 
 // Keep the draft on the server, so it survives view switches and reloads.
@@ -449,7 +443,8 @@ function saveDraft() {
   api("/api/draft", { pane, text: $("input").value }).catch(() => {});
 }
 
-function showErr(e) { $("err").textContent = e ? e.message || String(e) : ""; }
+function showErr(e) { actionError = e ? e.message || String(e) : ""; renderErr(); }
+function renderErr() { $("err").textContent = actionError || configError; }
 
 async function send() {
   const text = $("input").value;

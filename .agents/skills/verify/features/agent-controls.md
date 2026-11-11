@@ -22,7 +22,7 @@ Preconditions:
 
 - Baseline state. The fixture is at mode 0, so there is no mode line and `#mode` is not `.on`.
 
-- **Status segment.** Wait for `#status .seg` with `fixture-agent · verify`.
+- **Status segment.** Wait for `#status .seg` with `fixture-agent · verify`. The fixture footer has three chips: `fixture-agent · verify`, `⎇ main` and `42% context`.
 - **Cycle with Shift+Tab.** At mode 0 the pill is hidden, so use the key: `page.keyboard.press("Shift+Tab")`. Within 2 s, `j.agentScreen()` shows `mode: 1`, `#mode` has class `on`, and `#mode .ml` is `Accept edits`.
 - **Cycle with the pill.** Click `#mode`. The agent shows `mode: 2`, and `.ml` is `Plan mode`.
 - **Status chip.** `#hchip` has the text `idle`.
@@ -31,6 +31,7 @@ Preconditions:
 
 ## Gotchas
 
+- `config.toml` in the run directory can hide the pill (`mode = false`). See [status-bar.md](./status-bar.md).
 - The pill shows only when a footer line matches `mode on|accept edits|bypass permissions|plan mode|manual mode`. At mode 0 it is hidden, so it cannot be clicked.
 - The footer refreshes about once a second. Wait for it with `until`. Do not use one fixed sleep.
 - Shift+Tab and Esc are document-level key bindings in `index.html`. They work with focus anywhere on the page, including `#input`.

@@ -6,7 +6,8 @@
 import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { footer, inputText } from "./screen.ts";
+import { inputText } from "./screen.ts";
+import { statusBar } from "./status.ts";
 import { themeCss } from "./theme.ts";
 import { parsers, transcriptPath, type Item } from "./transcripts.ts";
 
@@ -194,6 +195,24 @@ type Client = {
   status?: string;
 };
 
+// The status bar config. HERDR_CHAT_CONFIG overrides the path, so a test run does not touch the user's file.
+// null when herdr cannot give the plugin config directory: the status bar then uses the defaults.
+async function configPath(): Promise<string | null> {
+  if (process.env.HERDR_CHAT_CONFIG) return process.env.HERDR_CHAT_CONFIG;
+  const dir = String(await herdr(["plugin", "config-dir", PLUGIN_ID]).catch(() => "")).trim();
+  return dir ? join(dir, "config.toml") : null;
+}
+
+// The config text, or null when the file is missing.
+function readConfig(path: string | null): string | null {
+  if (!path) return null;
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
 function readTheme(): string {
   try {
     return themeCss(readFileSync(themeFile, "utf8"));
@@ -212,6 +231,8 @@ async function serve() {
   let agentsJson = "";
   let lastActive = Date.now();
   let theme = readTheme();
+  const configFile = await configPath();
+  let config = readConfig(configFile);
   const drafts = new Map<string, string>();
   function setDraft(pane: string, text: string) {
     drafts.set(pane, text);
@@ -327,7 +348,8 @@ async function serve() {
       if (!agentFor(c.pane)) continue;
       herdr(["agent", "read", c.pane, "--source", "visible", "--format", "ansi"])
         .then((screen) => {
-          const json = JSON.stringify(footer(String(screen)));
+          // A config change gives a new model here, so the page gets it on the next tick.
+          const json = JSON.stringify(statusBar(String(screen), agentFor(c.pane) ?? null, config, homedir()));
           if (json === c.status) return;
           c.status = json;
           c.send("status", JSON.parse(json));
@@ -336,6 +358,7 @@ async function serve() {
     }
   }, 1000);
   setInterval(() => {
+    config = readConfig(configFile);
     const next = readTheme();
     if (next === theme) return;
     theme = next;
