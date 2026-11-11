@@ -8,7 +8,8 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { footer, inputText } from "./screen.ts";
 import { themeCss } from "./theme.ts";
-import { parsers, transcriptPath, type Item } from "./transcripts.ts";
+import { completions } from "./completions.ts";
+import { parsers, skillParsers, transcriptPath, type Item, type Skill } from "./transcripts.ts";
 
 const PLUGIN_ID = "rpbaptist.herdr-chat-view";
 const IDLE_EXIT_MS = 10 * 60_000;
@@ -192,6 +193,7 @@ type Client = {
   offset: number;
   seq: number;
   status?: string;
+  skills: Map<string, Skill>;
 };
 
 function readTheme(): string {
@@ -279,16 +281,31 @@ async function serve() {
     }
   }
 
+  // Add skills by name. Return true when the list changed.
+  function addSkills(known: Map<string, Skill>, found: Skill[]): boolean {
+    let changed = false;
+    for (const s of found) {
+      const prev = known.get(s.name);
+      if (prev && (prev.description === s.description || !s.description)) continue;
+      known.set(s.name, s);
+      changed = true;
+    }
+    return changed;
+  }
+
   // Send new transcript lines to a client. Reset when the agent changes session.
   async function pump(c: Client) {
     const a = agentFor(c.pane);
     const session = a?.agent_session?.value;
-    if (session !== c.session) {
-      c.session = session;
+    const key = `${a?.agent}/${session}`;
+    if (key !== c.session) {
+      c.session = key;
       c.offset = 0;
       c.seq = 0;
       c.path = a && session && parsers[a.agent] ? await transcriptPath(a.agent, session) : null;
       c.send("reset", { kind: a?.agent ?? null, transcript: !!c.path, parsed: !!(a && parsers[a.agent]) });
+      c.skills = new Map();
+      c.send("completions", completions(a?.agent, []));
     }
     // A new session writes its transcript only after the first message.
     if (!c.path && a && session && parsers[a.agent]) {
@@ -303,14 +320,18 @@ async function serve() {
     if (end < 0) return;
     c.offset += end + 1;
     const parse = parsers[a.agent];
+    const lines: unknown[] = [];
     const items: Item[] = [];
-    for (const line of new TextDecoder().decode(bytes.subarray(0, end)).split("\n")) {
-      if (!line) continue;
+    for (const text of new TextDecoder().decode(bytes.subarray(0, end)).split("\n")) {
+      if (!text) continue;
       try {
-        items.push(...parse(JSON.parse(line), c.seq++));
+        const line = JSON.parse(text);
+        lines.push(line);
+        items.push(...parse(line, c.seq++));
       } catch {}
     }
     if (items.length) c.send("items", items);
+    if (addSkills(c.skills, skillParsers[a.agent]?.(lines) ?? [])) c.send("completions", completions(a.agent, c.skills.values()));
   }
 
   setInterval(pollAgents, 1000);
@@ -374,6 +395,7 @@ async function serve() {
                 offset: 0,
                 seq: 0,
                 session: "\0",
+                skills: new Map(),
                 send: (event, data) => {
                   try {
                     ctrl.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));

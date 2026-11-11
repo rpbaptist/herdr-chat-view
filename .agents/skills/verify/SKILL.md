@@ -66,7 +66,7 @@ A journey is a TypeScript file that exports `default async (j: Journey) => {}`. 
 - `j.transcript()` returns the parsed transcript lines.
 - `j.until(what, fn)` polls until `fn` returns a true value.
 
-Use these page handles: `#input` (composer), `#send`, `#stop`, `#mode` (mode pill, `.ml` holds the label), `#term` (the "Terminal" button), `#items .msg.user`, `#items .msg.assistant`, `#items .msg.note`, `#items details.steps` (tool-call group), `#status .seg` (footer segments), `#blocked` (`.on` when the agent asks a question), `#hchip` (agent status text), `#err` (error line).
+Use these page handles: `#input` (composer), `#send`, `#stop`, `#mode` (mode pill, `.ml` holds the label), `#term` (the "Terminal" button), `#items .msg.user`, `#items .msg.assistant`, `#items .msg.note`, `#items details.steps` (tool-call group), `#status .seg` (footer segments), `#blocked` (`.on` when the agent asks a question), `#hchip` (agent status text), `#err` (error line), `#complete` (auto-complete popup, `.on` when open; entries are `.opt`, the selected one `.opt.on`, the name in `.nm`).
 
 The fixture agent (`scripts/fixture-agent.ts`) does these things:
 

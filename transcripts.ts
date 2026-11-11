@@ -118,6 +118,56 @@ const parseCodex: Parser = (line, seq) => {
 
 export const parsers: Record<string, Parser> = { claude: parseClaude, codex: parseCodex };
 
+// ---------- skill lists ----------
+
+export type Skill = { name: string; description: string };
+type SkillParser = (lines: any[]) => Skill[];
+
+// "- name: description". Plugin names have a colon too, but no space after it.
+const SKILL_LINE = /^- (\S+?)(?::\s+(.*?))?\s*$/;
+
+// Claude Code lists skills in `skill_listing` attachments: the first one has all
+// skills, later ones (`isInitial: false`) add new ones.
+const claudeSkills: SkillParser = (lines) => {
+  const skills: Skill[] = [];
+  for (const line of lines) {
+    const a = line?.attachment;
+    if (line?.isSidechain || a?.type !== "skill_listing") continue;
+    const descriptions = new Map<string, string>();
+    for (const l of String(a.content ?? "").split("\n")) {
+      const m = l.match(SKILL_LINE);
+      if (m) descriptions.set(m[1], m[2] ?? "");
+    }
+    const names: unknown[] = Array.isArray(a.names) ? a.names : [...descriptions.keys()];
+    for (const name of names) if (typeof name === "string") skills.push({ name, description: descriptions.get(name) ?? "" });
+  }
+  return skills;
+};
+
+// Codex lists skills in a developer message, under "### Available skills", as
+// "- name: description (file: path)" lines.
+const codexSkills: SkillParser = (lines) => {
+  const skills: Skill[] = [];
+  for (const line of lines) {
+    const p = line?.payload;
+    if (line?.type !== "response_item" || p?.type !== "message") continue;
+    for (const c of p.content ?? []) {
+      const text = String(c?.text ?? "").split("\n");
+      const start = text.indexOf("### Available skills");
+      if (start < 0) continue;
+      for (const l of text.slice(start + 1)) {
+        if (!l.trim() && !skills.length) continue;
+        const m = l.replace(/\s*\(file: [^)]*\)\s*$/, "").match(SKILL_LINE);
+        if (!m) break;
+        skills.push({ name: m[1], description: m[2] ?? "" });
+      }
+    }
+  }
+  return skills;
+};
+
+export const skillParsers: Record<string, SkillParser> = { claude: claudeSkills, codex: codexSkills };
+
 const home = homedir();
 const pathCache = new Map<string, string>();
 

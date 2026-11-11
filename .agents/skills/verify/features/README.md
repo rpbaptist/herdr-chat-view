@@ -35,3 +35,4 @@ Each feature file starts with an H1 title and one paragraph about the behavior t
 - [Toggle and close](./toggle.md) covers the toggle action that switches between the terminal and the chat, and the close action.
 - [Draft handoff](./draft-handoff.md) covers how a draft moves between the composer and Claude's input box when you switch views.
 - [Agent controls and status](./agent-controls.md) covers the mode pill (Shift+Tab), the footer status segments, interrupt, and the blocked-answer panel.
+- [Auto-complete](./autocomplete.md) covers the `/` and `$` popup for skills and built-in commands. Journey: `journeys/autocomplete.ts`. Status: proven.

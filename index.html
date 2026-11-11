@@ -123,7 +123,14 @@ footer { padding: 0 24px 18px; }
 .key { font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); }
 .key:hover { border-color: var(--soft); }
 .key.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-.composer { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 12px 12px 10px 16px; }
+/* auto-complete popup for skills and slash commands */
+#complete { display: none; position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 40vh; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px; z-index: 5; }
+#complete.on { display: block; }
+#complete .opt { display: flex; align-items: baseline; gap: 10px; padding: 5px 10px; border-radius: 8px; cursor: pointer; min-width: 0; }
+#complete .opt.on { background: var(--raised); }
+#complete .nm { font-family: var(--mono); font-size: 13px; color: var(--fg); flex: none; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#complete .ds { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.composer { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 12px 12px 10px 16px; }
 .composer:focus-within { border-color: color-mix(in srgb, var(--fg) 28%, var(--bg)); }
 textarea { width: 100%; resize: none; font: inherit; color: var(--fg); background: none; border: 0; outline: none; padding: 2px 0; max-height: 40vh; min-height: 26px; display: block; }
 textarea::placeholder { color: var(--muted); }
@@ -172,6 +179,7 @@ textarea::placeholder { color: var(--muted); }
         </div>
       </div>
       <div class="composer">
+        <div id="complete" role="listbox"></div>
         <textarea id="input" rows="1" placeholder="Reply to the agent…  (shift+tab: mode · esc: interrupt)"></textarea>
         <div class="bar">
           <button id="mode" title="Change mode (shift+tab)"><span class="md"></span><span class="ml"></span><span class="extra"></span></button>
@@ -372,12 +380,70 @@ function connect() {
   });
   es.addEventListener("theme", loadTheme);
   es.addEventListener("status", (e) => renderStatus(JSON.parse(e.data)));
-  es.addEventListener("draft-set", (e) => { $("input").value = JSON.parse(e.data); autosize(); });
+  es.addEventListener("draft-set", (e) => { $("input").value = JSON.parse(e.data); autosize(); updateComplete(); });
   es.addEventListener("draft", (e) => {
     const text = JSON.parse(e.data);
     if (!$("input").value && text) { $("input").value = text; autosize(); }
   });
   es.addEventListener("items", (e) => addItems(JSON.parse(e.data)));
+  es.addEventListener("completions", (e) => { completions = JSON.parse(e.data); updateComplete(); });
+}
+
+// Auto-complete: when the input starts with a trigger ("/" or "$"), list the
+// matching skills and commands. Fuzzy, case-insensitive; for "plugin:skill"
+// names the part after the colon also counts.
+let completions = [];
+let matches = [];
+let selected = 0;
+let dismissed = null; // the input value at Esc; the popup stays closed until it changes
+const subseq = (s, q) => { let i = 0; for (const ch of s) if (ch === q[i]) i++; return i === q.length; };
+function score(name, q) {
+  const n = name.toLowerCase(), tail = n.slice(n.lastIndexOf(":") + 1);
+  if (n.startsWith(q) || tail.startsWith(q)) return 4;
+  if (n.includes(q)) return 3;
+  if (subseq(tail, q)) return 2;
+  return subseq(n, q) ? 1 : 0;
+}
+const completeOpen = () => $("complete").classList.contains("on");
+function updateComplete() {
+  const v = $("input").value;
+  const m = v.match(/^([\/$])(\S*)$/);
+  matches = [];
+  if (v !== dismissed) dismissed = null;
+  if (m && dismissed === null && document.activeElement === $("input")) {
+    const q = m[2].toLowerCase();
+    matches = completions
+      .filter((c) => c.trigger === m[1])
+      .map((c) => ({ c, s: score(c.name, q) }))
+      .filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s || a.c.name.localeCompare(b.c.name))
+      .slice(0, 50)
+      .map((x) => x.c);
+  }
+  selected = Math.min(selected, Math.max(matches.length - 1, 0));
+  $("complete").classList.toggle("on", matches.length > 0);
+  $("complete").innerHTML = matches.map((c, i) =>
+    `<div class="opt${i === selected ? " on" : ""}" role="option" data-i="${i}"><span class="nm">${esc(c.trigger + c.name)}</span><span class="ds">${esc(c.description)}</span></div>`).join("");
+  $("complete").querySelector(".opt.on")?.scrollIntoView({ block: "nearest" });
+}
+function pickComplete(i) {
+  const c = matches[i];
+  if (!c) return;
+  $("input").value = `${c.trigger}${c.name} `;
+  autosize(); saveDraft(); updateComplete();
+  $("input").focus();
+}
+// While the popup is open, these keys go to the popup only: not to the agent,
+// and not to an agent question.
+function completeKey(e) {
+  if (!completeOpen() || e.isComposing || e.ctrlKey || e.altKey || e.metaKey) return false;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") selected = (selected + (e.key === "ArrowDown" ? 1 : -1) + matches.length) % matches.length;
+  else if ((e.key === "Tab" && !e.shiftKey) || (e.key === "Enter" && !e.shiftKey)) pickComplete(selected);
+  else if (e.key === "Escape") dismissed = $("input").value;
+  else return false;
+  e.preventDefault(); e.stopPropagation();
+  updateComplete();
+  return true;
 }
 
 // ANSI SGR to HTML. Colors 0-15 use the terminal theme palette (--c0..--c15).
@@ -480,9 +546,17 @@ $("items").addEventListener("click", (e) => {
   if (!b) return;
   navigator.clipboard?.writeText(b.nextElementSibling.innerText).then(() => { b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy"), 1200); });
 });
-$("input").addEventListener("input", () => { autosize(); saveDraft(); });
+$("input").addEventListener("input", () => { selected = 0; autosize(); saveDraft(); updateComplete(); });
+// Close the popup when the input loses focus, so that its keys go back to the page.
+$("input").addEventListener("blur", updateComplete);
+$("input").addEventListener("focus", updateComplete);
+$("complete").addEventListener("mousedown", (e) => {
+  const o = e.target.closest(".opt");
+  if (o) { e.preventDefault(); pickComplete(Number(o.dataset.i)); }
+});
 $("mode").addEventListener("click", () => keys("shift+tab"));
 $("input").addEventListener("keydown", (e) => {
+  if (completeKey(e)) return;
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !blockedKey(e)) { e.preventDefault(); send(); }
 });
 // Keep the terminal keys: shift+tab cycles the mode, esc interrupts.
