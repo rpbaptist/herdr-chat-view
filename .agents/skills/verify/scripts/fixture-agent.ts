@@ -41,7 +41,7 @@ let last = "(none)";
 const rule = "─".repeat(60);
 function draw() {
   const box = input ? `❯ ${input}` : "❯ \x1b[2mType a message\x1b[0m";
-  const footer = [MODES[mode], "fixture-agent · verify"].filter(Boolean).join("\n  ");
+  const footer = [MODES[mode], "fixture-agent · verify  \x1b[33m⎇ main\x1b[0m  42% context"].filter(Boolean).join("\n  ");
   process.stdout.write(`\x1b]0;fixture-agent\x07\x1b[2J\x1b[Hfixture-agent session ${session}\nlast: ${last}\nmode: ${mode}\n\n${rule}\n${box}\n${rule}\n  ${footer}\n`);
 }
 

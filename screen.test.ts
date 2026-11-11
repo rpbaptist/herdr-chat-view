@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { footer, inputText } from "./screen.ts";
+import { inputText } from "./screen.ts";
 
 const rule = (n = 40) => "─".repeat(n);
 const screen = (...lines: string[]) => lines.join("\n");
@@ -41,26 +41,5 @@ describe("inputText", () => {
 
   test("does not take a short line of dashes as a rule", () => {
     expect(inputText(screen("─────", "❯ x", "─────"))).toBeNull();
-  });
-});
-
-describe("footer", () => {
-  test("returns the non-empty lines below the last rule", () => {
-    expect(footer(screen("❯ hi", rule(), "  ⏵⏵ accept edits on", "", "  model: opus"))).toEqual([
-      "  ⏵⏵ accept edits on",
-      "  model: opus",
-    ]);
-  });
-
-  test("keeps ANSI colors in the lines", () => {
-    expect(footer(screen(rule(), "\x1b[2mstatus\x1b[0m"))).toEqual(["\x1b[2mstatus\x1b[0m"]);
-  });
-
-  test("returns at most four lines", () => {
-    expect(footer(screen(rule(), "1", "2", "3", "4", "5"))).toEqual(["1", "2", "3", "4"]);
-  });
-
-  test("returns nothing when there is no rule", () => {
-    expect(footer("plain output\nmore")).toEqual([]);
   });
 });

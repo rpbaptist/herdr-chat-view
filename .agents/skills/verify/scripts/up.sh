@@ -28,6 +28,7 @@ HERDR_SOCKET_PATH=$sock
 SESSION_ID=$sid
 TRANSCRIPT_DIR=$tdir
 TRANSCRIPT=$transcript
+HERDR_CHAT_CONFIG=$dir/config.toml
 EOF
 add() { echo "$1=$2" >>"$dir/run.env"; }
 
@@ -56,7 +57,8 @@ for _ in $(seq 100); do [[ $(agent_line) == "$want" ]] && break; sleep 0.2; done
 [[ $(agent_line) == "$want" ]] || fail "fixture agent in $pane is '$(agent_line)', want '$want'"
 
 # 3. The real toggle action from this checkout: starts the chat server and opens the chat pane.
-HERDR_PANE_ID=$pane bun "$checkout/herdr-chat.ts" toggle >"$dir/toggle.out" 2>&1 || fail "toggle: $(cat "$dir/toggle.out")"
+#    The server reads the status bar config from the run directory, not from the user's config.
+HERDR_CHAT_CONFIG=$dir/config.toml HERDR_PANE_ID=$pane bun "$checkout/herdr-chat.ts" toggle >"$dir/toggle.out" 2>&1 || fail "toggle: $(cat "$dir/toggle.out")"
 key=$(bun -e 'console.log(Bun.hash(process.env.HERDR_SOCKET_PATH).toString(36))')
 state=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/herdr-chat/$key
 add STATE_DIR "$state"
