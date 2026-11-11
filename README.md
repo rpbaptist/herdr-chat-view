@@ -4,7 +4,10 @@ A [herdr](https://herdr.dev) plugin that shows a chat view of an agent session
 next to its terminal. It is for local use only. It is not a herdr replacement.
 
 - One key switches the focused agent between its terminal and the chat view.
-  herdr zooms the pane, so the other pane keeps running behind it.
+  The shown view takes the place of the other one. The other view keeps
+  running in a tab of its own (`chat (hidden)` or `terminal (hidden)`), so a
+  pane that you split next to the view does not show both. After a herdr
+  restart, the terminal gets its place back and the chat pane closes.
 - The chat reads the agent's own transcript (Claude Code, Codex) and sends
   messages back with `herdr agent prompt`. Other agents show their screen.
 - The page is drawn in the pane with [pixel](https://pixelgui.com), so there is
@@ -164,7 +167,7 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 | File | Purpose |
 | --- | --- |
-| `herdr-chat.ts` | `toggle` and `close` actions, and the local chat server |
+| `herdr-chat.ts` | `toggle` and `close` actions, the `restore` startup hook, and the local chat server |
 | `transcripts.ts` | Claude Code and Codex transcript and skill-list parsers |
 | `agents.ts` | One descriptor for each agent kind: parsers, transcript lookup, skill trigger, built-in commands |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |

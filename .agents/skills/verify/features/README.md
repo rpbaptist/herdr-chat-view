@@ -7,7 +7,7 @@ This directory is the maintained source for verifying what a user of herdr-chat-
 - Start an instance with `scripts/up.sh [checkout]` and keep the `<run-dir>` it prints.
 - `scripts/doctor.sh <run-dir>` passes all checks.
 - The agent pane runs the fixture agent: `claude`, `idle`, with the seeded transcript (`fixtures/seed.jsonl`).
-- `up.sh` has already run the toggle action once. So the chat pane exists and is zoomed and focused.
+- `up.sh` has already run the toggle action once. So the chat pane shows and has focus, and the agent pane waits in a `terminal (hidden)` tab.
 - Never drive an instance that this run did not start.
 
 ## Driving conventions
@@ -20,7 +20,7 @@ This directory is the maintained source for verifying what a user of herdr-chat-
 ## Proof and skip reporting
 
 - Capture the page before and after each user action.
-- Show every side effect from a second view. Examples: a transcript line, the agent pane screen, the pane layout and zoom.
+- Show every side effect from a second view. Examples: a transcript line, the agent pane screen, the pane layout and the tab of each pane.
 - Report each feature ID with the entry point that you used.
 - If a precondition cannot be met (for example, the fixture has no `blocked` state), report the feature as not verified and name the precondition. Do not prove it through another path.
 
@@ -32,7 +32,7 @@ Each feature file starts with an H1 title and one paragraph about the behavior t
 
 - [Send a message](./send-message.md) covers the composer, sending with Enter or the button, and the reply that comes back. Journey: `journeys/send-message.ts`. Status: proven.
 - [Transcript view](./transcript.md) covers how the agent's transcript shows: messages, markdown, tool-step groups, hidden meta lines, and live appends.
-- [Toggle and close](./toggle.md) covers the toggle action that switches between the terminal and the chat, and the close action.
+- [Toggle and close](./toggle.md) covers the toggle action that switches between the terminal and the chat, the close action, and recovery after closed panes or a herdr restart. Journeys: `journeys/single-view.ts`, `journeys/view-lifecycle.ts` (run it last). Status: proven.
 - [Draft handoff](./draft-handoff.md) covers how a draft moves between the composer and Claude's input box when you switch views.
 - [Status bar config](./status-bar.md) covers `config.toml`: hidden, moved and built-in chips, `mode = false`, config errors, and live reload. Journey: `journeys/status-bar.ts`. Status: proven.
 - [Status bar settings popover](./status-settings.md) covers the gear next to the status bar: the mode pill, items, hide regexes, the quick hide of a chip, refused values, a config error, and the keys and focus of the popover. Journey: `journeys/status-settings.ts`. Status: proven.

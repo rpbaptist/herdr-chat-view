@@ -87,7 +87,7 @@ Proof standards:
 
 - Drive the page the way a user does: type, click and press keys. Do not call `/api/*` with curl to prove a feature that has a page control.
 - Capture the state before and after an action, not only the last screen.
-- Check side effects outside the page. For example, check the transcript entry (`j.transcript()`), the agent pane (`j.agentScreen()`), and the herdr pane layout and zoom (`herdr pane layout --pane $AGENT_PANE`).
+- Check side effects outside the page. For example, check the transcript entry (`j.transcript()`), the agent pane (`j.agentScreen()`), and the herdr pane layout and the tab of each pane (`herdr pane layout --pane $AGENT_PANE`, `herdr pane list`).
 - Look at the screenshots before you report. A journey can pass and still show a broken layout.
 - The fixture stands in for Claude Code. It does not prove that real Claude transcripts parse. For a parser change, add the real line shape to a fixture or seed, and name that limit in the report.
 

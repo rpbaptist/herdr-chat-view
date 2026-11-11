@@ -68,7 +68,7 @@ HERDR_CHAT_VOICE_BIN=$dir/voxtype/voxtype FAKE_VOXTYPE_DIR=$dir/voxtype \
 key=$(bun -e 'console.log(Bun.hash(process.env.HERDR_SOCKET_PATH).toString(36))')
 state=${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/herdr-chat/$key
 add STATE_DIR "$state"
-chat=$(jq -r --arg p "$pane" '.[$p] // empty' "$state/panes.json" 2>/dev/null || true)
+chat=$(jq -r --arg p "$pane" '.[$p].chat // empty' "$state/panes.json" 2>/dev/null || true)
 [[ -n $chat ]] || fail "toggle did not record a chat pane"
 add CHAT_PANE "$chat"
 port=$(jq -r .port "$state/server.json"); token=$(jq -r .token "$state/server.json"); pid=$(jq -r .pid "$state/server.json")
