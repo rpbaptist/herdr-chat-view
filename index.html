@@ -382,6 +382,7 @@ function connect() {
     syncScreenTimer();
   });
   es.addEventListener("theme", loadTheme);
+  es.addEventListener("settings", (e) => applySettings(JSON.parse(e.data)));
   es.addEventListener("status", (e) => renderStatus(JSON.parse(e.data)));
   es.addEventListener("draft-set", (e) => { $("input").value = JSON.parse(e.data); autosize(); updateComplete(); });
   es.addEventListener("draft", (e) => {
@@ -550,9 +551,16 @@ $("complete").addEventListener("mousedown", (e) => {
   if (o) { e.preventDefault(); pickComplete(Number(o.dataset.i)); }
 });
 $("mode").addEventListener("click", () => keys("shift+tab"));
+// Page settings from config.toml. In ctrl-enter mode Enter adds a new line.
+let sendKey = "enter";
+function applySettings(s) {
+  sendKey = s.sendKey;
+  $("send").title = `Send (${sendKey === "enter" ? "Enter" : "Ctrl+Enter"})`;
+}
+const sendsMessage = (e) => e.key === "Enter" && !e.isComposing && (sendKey === "enter" ? !e.shiftKey : e.ctrlKey || e.metaKey);
 $("input").addEventListener("keydown", (e) => {
   if (completeKey(e)) return;
-  if (e.key === "Enter" && !e.shiftKey && !e.isComposing && !blockedKey(e)) { e.preventDefault(); send(); }
+  if (sendsMessage(e) && !blockedKey(e)) { e.preventDefault(); send(); }
 });
 // Keep the terminal keys: shift+tab cycles the mode, esc interrupts.
 // While the agent asks a question and the box is empty, answer keys go to the agent.

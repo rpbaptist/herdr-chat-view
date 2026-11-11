@@ -43,10 +43,14 @@ description = "Chat view: toggle terminal / chat"
 
 An optional `config.toml` in the plugin config directory
 (`herdr plugin config-dir rpbaptist.herdr-chat-view`) controls the status bar
-under the message box. Without the file, the status bar shows the agent's
-footer as it is. The terms are in [GLOSSARY.md](GLOSSARY.md).
+under the message box and the send key. Without the file, the status bar shows
+the agent's footer as it is, and Enter sends. The terms are in
+[GLOSSARY.md](GLOSSARY.md).
 
 ```toml
+[input]
+send_key = "enter"               # "enter" (default) or "ctrl-enter"
+
 [status]
 mode = true                      # show the mode pill in the composer
 hide = ["/\\d+% context/"]       # regexes on plain chip text; screen chips only; runs first
@@ -64,9 +68,15 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
   branch of the agent's working directory; no chip outside a git repository or
   on a detached HEAD). The server runs git only when `items` lists `branch`.
 
+- `input.send_key` (default `"enter"`) sets the key that sends the message. With
+  `"ctrl-enter"`, Enter and Shift+Enter add a new line, and Ctrl+Enter or
+  Cmd+Enter sends. The send button tooltip shows the active key. The
+  auto-complete popup still takes Enter and Tab, and the answer keys for a
+  blocked agent do not change.
+
 The server reads the file every 2 seconds, so open chat pages show a change
-with no restart. If the file has an error, the status bar uses the defaults
-and the page shows the error in one line.
+with no restart. If the file has an error (including an unknown table or
+key), all settings use the defaults and the page shows the error in one line.
 
 ## Tests
 
@@ -74,8 +84,8 @@ and the page shows the error in one line.
 bun test
 ```
 
-Unit tests cover the transcript parsers, the screen readers, the status bar
-model and the theme.
+Unit tests cover the transcript parsers, the screen readers, the config file,
+the status bar model and the theme.
 The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 ## Files
@@ -86,6 +96,7 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | `transcripts.ts` | Claude Code and Codex transcript and skill-list parsers |
 | `agents.ts` | One descriptor for each agent kind: parsers, transcript lookup, skill trigger, built-in commands |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |
+| `config.ts` | Parses `config.toml`: one table, one parser |
 | `branches.ts` | The git branch of a working directory, cached |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
 | `theme.ts` | Omarchy theme colors as CSS variables |

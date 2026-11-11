@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { loadConfig } from "./config.ts";
 import { statusBar, usesBranch, type StatusAgent } from "./status.ts";
 
 const rule = (n = 40) => "─".repeat(n);
 const screen = (...lines: string[]) => lines.join("\n");
 const agent: StatusAgent = { agent: "claude", agent_status: "idle", cwd: "/home/me/code/app" };
 const HOME = "/home/me";
-const bar = (s: string, config: string | null = null, a: StatusAgent | null = agent) => statusBar(s, a, config, HOME);
+const bar = (s: string, config: string | null = null, a: StatusAgent | null = agent) => statusBar(s, a, loadConfig(config), HOME);
 const texts = (s: string, config: string | null = null, a: StatusAgent | null = agent) => bar(s, config, a).chips.map((c) => c.text);
 
 const claude = screen(
@@ -106,10 +107,11 @@ describe("statusBar built-in items", () => {
   });
 
   test("usesBranch is true only when items lists branch", () => {
-    expect(usesBranch(null)).toBe(false);
-    expect(usesBranch(items('"kind", "*"'))).toBe(false);
-    expect(usesBranch(items('"kind", "branch"'))).toBe(true);
-    expect(usesBranch("[status]\nitems = [\"nope\"]")).toBe(false);
+    const uses = (text: string | null) => usesBranch(loadConfig(text).status);
+    expect(uses(null)).toBe(false);
+    expect(uses(items('"kind", "*"'))).toBe(false);
+    expect(uses(items('"kind", "branch"'))).toBe(true);
+    expect(uses("[status]\nitems = [\"nope\"]")).toBe(false);
   });
 
   test("uses the foreground cwd before the cwd", () => {
