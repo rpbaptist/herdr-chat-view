@@ -7,6 +7,7 @@ import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { inputText } from "./screen.ts";
+import { loadConfig, pageSettings } from "./config.ts";
 import { statusBar } from "./status.ts";
 import { themeCss } from "./theme.ts";
 import { completions } from "./completions.ts";
@@ -194,6 +195,7 @@ type Client = {
   offset: number;
   seq: number;
   status?: string;
+  settings?: string;
   skills: Map<string, Skill>;
 };
 
@@ -235,6 +237,13 @@ async function serve() {
   let theme = readTheme();
   const configFile = await configPath();
   let config = readConfig(configFile);
+  // The page settings from config.toml, sent when a page connects and when a value changes.
+  function sendSettings(c: Client) {
+    const json = JSON.stringify(pageSettings(loadConfig(config)));
+    if (json === c.settings) return;
+    c.settings = json;
+    c.send("settings", JSON.parse(json));
+  }
   const drafts = new Map<string, string>();
   function setDraft(pane: string, text: string) {
     drafts.set(pane, text);
@@ -358,7 +367,7 @@ async function serve() {
       herdr(["agent", "read", c.pane, "--source", "visible", "--format", "ansi"])
         .then((screen) => {
           // A config change gives a new model here, so the page gets it on the next tick.
-          const json = JSON.stringify(statusBar(String(screen), agentFor(c.pane) ?? null, config, homedir()));
+          const json = JSON.stringify(statusBar(String(screen), agentFor(c.pane) ?? null, loadConfig(config), homedir()));
           if (json === c.status) return;
           c.status = json;
           c.send("status", JSON.parse(json));
@@ -368,6 +377,7 @@ async function serve() {
   }, 1000);
   setInterval(() => {
     config = readConfig(configFile);
+    for (const c of clients) sendSettings(c);
     const next = readTheme();
     if (next === theme) return;
     theme = next;
@@ -419,6 +429,7 @@ async function serve() {
               clients.add(client);
               client.send("agents", JSON.parse(agentsJson || "[]"));
               client.send("draft", drafts.get(pane) ?? "");
+              sendSettings(client);
               pump(client).catch(() => {});
             },
             cancel() {

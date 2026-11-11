@@ -18,12 +18,12 @@ const isBuiltin = (s: string): s is Builtin => Object.hasOwn(BUILTINS, s);
 const tilde = (path: string, home: string) => (path === home || path.startsWith(home + "/") ? "~" + path.slice(home.length) : path);
 
 type StatusItem = { builtin: Builtin } | { regex: RegExp } | "*";
-type Config = { mode: boolean; hide: RegExp[]; items: StatusItem[] };
+export type StatusConfig = { mode: boolean; hide: RegExp[]; items: StatusItem[] };
 
-const DEFAULTS: Config = { mode: true, hide: [], items: ["*"] };
+const DEFAULTS: StatusConfig = { mode: true, hide: [], items: ["*"] };
 
-export function statusBar(screen: string, agent: StatusAgent | null, configText: string | null, home: string): StatusBar {
-  const { config, error } = loadConfig(configText);
+// The error is the config.toml error line of any table: the status bar shows it.
+export function statusBar(screen: string, agent: StatusAgent | null, { status: config, error }: { status: StatusConfig; error: string | null }, home: string): StatusBar {
   const { mode, chips } = footer(screen);
   const shown = chips.filter((c) => !config.hide.some((r) => r.test(c.text)));
   const placed = new Set<ScreenChip>();
@@ -42,27 +42,8 @@ export function statusBar(screen: string, agent: StatusAgent | null, configText:
   return { mode: config.mode ? mode : null, chips: out, error };
 }
 
-// The last config text and its result: the server resolves the status bar every second.
-let cache: { text: string | null; result: { config: Config; error: string | null } } | null = null;
-
-function loadConfig(text: string | null): { config: Config; error: string | null } {
-  if (cache?.text !== text) {
-    let result: { config: Config; error: string | null };
-    try {
-      result = { config: text === null ? DEFAULTS : parseConfig(text), error: null };
-    } catch (e) {
-      result = { config: DEFAULTS, error: `config.toml: ${(e as Error).message.split("\n")[0]}` };
-    }
-    cache = { text, result };
-  }
-  return cache.result;
-}
-
-function parseConfig(text: string): Config {
-  const { status = {}, ...rest } = Bun.TOML.parse(text) as Record<string, unknown>;
-  const other = Object.keys(rest)[0];
-  if (other) throw new Error(`unknown key ${other} (put the settings in [status])`);
-  if (!isTable(status)) throw new Error("status must be a table");
+// The [status] table of config.toml.
+export function parseStatus(status: Record<string, unknown>): StatusConfig {
   const config = { ...DEFAULTS };
   for (const [key, value] of Object.entries(status)) {
     if (key === "mode") {
@@ -78,8 +59,6 @@ function parseConfig(text: string): Config {
   }
   return config;
 }
-
-const isTable = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function stringList(key: string, value: unknown): string[] {
   if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) throw new Error(`status.${key} must be a list of strings`);
