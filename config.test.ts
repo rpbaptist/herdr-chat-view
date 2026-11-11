@@ -1,13 +1,31 @@
 import { describe, expect, test } from "bun:test";
 import { loadConfig, pageSettings, updateConfig } from "./config.ts";
 
+const STATUS_DEFAULTS = { mode: true, hide: [], items: ["*"], builtins: ["kind", "cwd", "status", "branch"] };
+
+describe("pageSettings status", () => {
+  test("gives the [status] strings as written, and the built-in names", () => {
+    const text = '[status]\nmode = false\nhide = ["/\\\\d+% context/i"]\nitems = ["branch", "/^⎇/", "*"]';
+    expect(pageSettings(loadConfig(text))).toMatchObject({
+      status: { mode: false, hide: ["/\\d+% context/i"], items: ["branch", "/^⎇/", "*"], builtins: STATUS_DEFAULTS.builtins },
+      error: null,
+    });
+  });
+
+  test("gives the defaults and the error line for a file with an error", () => {
+    const s = pageSettings(loadConfig('[status]\nhide = ["/(oops/"]'));
+    expect(s.status).toEqual(STATUS_DEFAULTS);
+    expect(s.error).toMatch(/^config\.toml: status\.hide\[0\]/);
+  });
+});
+
 describe("loadConfig", () => {
   test("gives the defaults when the file is missing", () => {
     const c = loadConfig(null);
     expect(c.error).toBeNull();
     expect(c.input).toEqual({ sendKey: "enter" });
     expect(c.status.mode).toBe(true);
-    expect(pageSettings(c)).toEqual({ sendKey: "enter", themeMode: "auto" });
+    expect(pageSettings(c)).toEqual({ sendKey: "enter", themeMode: "auto", status: STATUS_DEFAULTS, error: null });
   });
 
   test("gives the defaults for an empty file", () => {
@@ -15,8 +33,8 @@ describe("loadConfig", () => {
   });
 
   test("reads send_key from [input]", () => {
-    expect(pageSettings(loadConfig('[input]\nsend_key = "ctrl-enter"'))).toEqual({ sendKey: "ctrl-enter", themeMode: "auto" });
-    expect(pageSettings(loadConfig('[input]\nsend_key = "enter"'))).toEqual({ sendKey: "enter", themeMode: "auto" });
+    expect(pageSettings(loadConfig('[input]\nsend_key = "ctrl-enter"')).sendKey).toBe("ctrl-enter");
+    expect(pageSettings(loadConfig('[input]\nsend_key = "enter"')).sendKey).toBe("enter");
   });
 
   test("reads the tables independently", () => {

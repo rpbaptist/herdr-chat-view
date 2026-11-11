@@ -1,13 +1,13 @@
 // config.toml: one table per feature, one parser per table.
-import { parseStatus } from "./status.ts";
+import { parseStatus, statusSettings, type StatusSettings } from "./status.ts";
 import { parseFont } from "./fonts.ts";
 import { parseTheme, type ThemeMode } from "./theme.ts";
 import { setKey, type Value } from "./config-edit.ts";
 
 export type SendKey = "enter" | "ctrl-enter";
 export type InputConfig = { sendKey: SendKey };
-// What the server sends to each page, apart from the status bar.
-export type Settings = { sendKey: SendKey; themeMode: ThemeMode };
+// What the server sends to each page, apart from the status bar. error is the config.toml error line: the page does not write while there is one.
+export type Settings = { sendKey: SendKey; themeMode: ThemeMode; status: StatusSettings; error: string | null };
 
 const SEND_KEYS: SendKey[] = ["enter", "ctrl-enter"];
 
@@ -45,7 +45,8 @@ function parseTables(toml: Record<string, unknown>): Tables {
 
 const DEFAULTS = parseTables({});
 
-export const pageSettings = (config: Config): Settings => ({ sendKey: config.input.sendKey, themeMode: config.theme.mode });
+export const pageSettings = (config: Config): Settings =>
+  ({ sendKey: config.input.sendKey, themeMode: config.theme.mode, status: statusSettings(config.status), error: config.error });
 
 // The last config text and its result: the server resolves the config every second.
 let cache: { text: string | null; config: Config } | null = null;
