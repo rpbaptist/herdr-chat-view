@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parsers, skillParsers } from "./transcripts.ts";
+import { agents } from "./agents.ts";
 
-const claude = parsers.claude;
-const codex = parsers.codex;
+const claude = agents.claude.parse;
+const codex = agents.codex.parse;
 
 describe("claude parser", () => {
   const user = (content: unknown, extra = {}) => ({ type: "user", uuid: "u1", timestamp: "T", message: { content }, ...extra });
@@ -133,7 +133,7 @@ describe("claude skill parser", () => {
       ["verify", "mattpocock-skills:grilling", "anthropic-skills:xlsx"],
       "- verify: Drive the real plugin end to end.\n- mattpocock-skills:grilling: Grill the user: hard.\n- anthropic-skills:xlsx",
     );
-    expect(skillParsers.claude([line])).toEqual([
+    expect(agents.claude.parseSkills([line])).toEqual([
       { name: "verify", description: "Drive the real plugin end to end." },
       { name: "mattpocock-skills:grilling", description: "Grill the user: hard." },
       { name: "anthropic-skills:xlsx", description: "" },
@@ -142,12 +142,12 @@ describe("claude skill parser", () => {
 
   test("reads a later delta listing", () => {
     const delta = listing(["weighted-decisions"], "- weighted-decisions: Rank documented decisions.", false);
-    expect(skillParsers.claude([user("hi"), delta])).toEqual([{ name: "weighted-decisions", description: "Rank documented decisions." }]);
+    expect(agents.claude.parseSkills([user("hi"), delta])).toEqual([{ name: "weighted-decisions", description: "Rank documented decisions." }]);
   });
 
   test("ignores other lines and sidechains", () => {
-    expect(skillParsers.claude([user("/verify"), { type: "attachment", attachment: { type: "todo" } }])).toEqual([]);
-    expect(skillParsers.claude([{ ...listing(["x"], "- x: y"), isSidechain: true }])).toEqual([]);
+    expect(agents.claude.parseSkills([user("/verify"), { type: "attachment", attachment: { type: "todo" } }])).toEqual([]);
+    expect(agents.claude.parseSkills([{ ...listing(["x"], "- x: y"), isSidechain: true }])).toEqual([]);
   });
 });
 
@@ -168,7 +168,7 @@ describe("codex skill parser", () => {
   ].join("\n");
 
   test("reads the available skills section and drops the file part", () => {
-    expect(skillParsers.codex([developer(section)])).toEqual([
+    expect(agents.codex.parseSkills([developer(section)])).toEqual([
       { name: "imagegen", description: "Generate or edit raster images" },
       { name: "docs-tools:reconcile-docs", description: "Reconcile docs: rank them" },
       { name: "bare", description: "" },
@@ -176,11 +176,11 @@ describe("codex skill parser", () => {
   });
 
   test("allows a blank line after the heading", () => {
-    expect(skillParsers.codex([developer("### Available skills\n\n- imagegen: Images (file: r2/x)\n\n- not: listed")]))
+    expect(agents.codex.parseSkills([developer("### Available skills\n\n- imagegen: Images (file: r2/x)\n\n- not: listed")]))
       .toEqual([{ name: "imagegen", description: "Images" }]);
   });
 
   test("ignores messages without the section and other line types", () => {
-    expect(skillParsers.codex([developer("# AGENTS.md\n- a: b"), { type: "world_state", payload: {} }])).toEqual([]);
+    expect(agents.codex.parseSkills([developer("# AGENTS.md\n- a: b"), { type: "world_state", payload: {} }])).toEqual([]);
   });
 });
