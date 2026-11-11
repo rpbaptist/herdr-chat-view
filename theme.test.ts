@@ -1,93 +1,97 @@
 import { describe, expect, test } from "bun:test";
-import { herdrThemes, parseTheme, themeCss, themeStyle } from "./theme.ts";
+import { THEMES } from "./herdr-themes.ts";
+import { herdrPalette, parseTheme, themeStyle } from "./theme.ts";
+import type { TerminalColors } from "./terminal-colors.ts";
 
-const toml = `
-background = "#1a1b26"
-foreground = "#a9b1d6"
-selection_background = "#33467c"
-color1 = "#f7768e"
-color2 = "#9ece6a"
-color3 = "#e0af68"
-color8 = "#444b6a"
-not_a_color = "red"
-`;
+const ansi = Array.from({ length: 16 }, (_, i) => `#0000${i.toString(16).padStart(2, "0")}`);
+const darkTerm: TerminalColors = { fg: "#ebdbb2", bg: "#1d2021", ansi };
+const lightTerm: TerminalColors = { fg: "#282828", bg: "#f9f5d7", ansi };
+const vars = (css: string) => Object.fromEntries([...css.matchAll(/--([\w-]+): ([^;]+);/g)].map((m) => [m[1], m[2]]));
 
-test("maps theme colors to CSS variables", () => {
-  const css = themeCss(toml);
-  expect(css.startsWith(":root, :root:root {")).toBe(true);
-  for (const decl of ["--bg: #1a1b26;", "--fg: #a9b1d6;", "--muted: #444b6a;", "--accent: #e0af68;", "--ok: #9ece6a;",
-    "--err: #f7768e;", "--sel-bg: #33467c;", "--c1: #f7768e;", "--c8: #444b6a;"]) {
-    expect(css).toContain(decl);
-  }
-});
-
-test("leaves out colors the theme does not set", () => {
-  const css = themeCss(toml);
-  expect(css).not.toContain("--sel-fg");
-  expect(css).not.toContain("--c9");
-  expect(css).not.toContain("red");
-});
-
-test("uses the bright yellow as accent when the normal yellow is missing", () => {
-  expect(themeCss('background = "#000"\nforeground = "#fff"\ncolor11 = "#ff0"')).toContain("--accent: #ff0;");
-});
-
-test("returns empty without background and foreground", () => {
-  expect(themeCss('background = "#000"')).toBe("");
-  expect(themeCss("")).toBe("");
-});
-
-const light = 'background = "#f9f5d7"\nforeground = "#282828"';
-const herdr = '[theme]\nname = "gruvbox"\ndark_name = "gruvbox"\nlight_name = "gruvbox-light"\n';
-const themes: Record<string, string> = { active: toml, gruvbox: toml, "gruvbox-light": light };
-const colors = (name: string | null) => themes[name ?? "active"] ?? null;
-
-test("sets color-scheme from the background of the theme", () => {
-  expect(themeCss(toml)).toContain("color-scheme: dark;");
-  expect(themeCss(light)).toContain("color-scheme: light;");
-});
-
-describe("herdrThemes", () => {
-  test("reads dark_name and light_name", () => {
-    expect(herdrThemes(herdr)).toEqual({ dark: "gruvbox", light: "gruvbox-light" });
+describe("herdrPalette", () => {
+  test("is catppuccin with no herdr config, as in herdr", () => {
+    expect(herdrPalette(null, "auto", null)).toEqual(THEMES.catppuccin);
+    expect(herdrPalette("not toml [", "auto", null)).toEqual(THEMES.catppuccin);
   });
 
-  test("gives null for a missing file, a bad file, a missing key and a name that is a path", () => {
-    expect(herdrThemes(null)).toEqual({ dark: null, light: null });
-    expect(herdrThemes("[theme")).toEqual({ dark: null, light: null });
-    expect(herdrThemes('[theme]\nname = "x"')).toEqual({ dark: null, light: null });
-    expect(herdrThemes('[theme]\ndark_name = "../x"\nlight_name = ".hidden"')).toEqual({ dark: null, light: null });
-    expect(herdrThemes('[theme]\ndark_name = 1\nlight_name = ""')).toEqual({ dark: null, light: null });
+  test("auto is [theme] name, and takes herdr's aliases", () => {
+    expect(herdrPalette('[theme]\nname = "gruvbox"', "auto", null)).toEqual(THEMES.gruvbox);
+    expect(herdrPalette('[theme]\nname = "Tokyo Night"', "auto", null)).toEqual(THEMES["tokyo-night"]);
+  });
+
+  test("auto with auto_switch follows the terminal background", () => {
+    const cfg = '[theme]\nname = "gruvbox"\nauto_switch = true';
+    expect(herdrPalette(cfg, "auto", lightTerm.bg)).toEqual(THEMES["gruvbox-light"]);
+    expect(herdrPalette(cfg, "auto", darkTerm.bg)).toEqual(THEMES.gruvbox);
+    expect(herdrPalette(cfg, "auto", null)).toEqual(THEMES.gruvbox);
+  });
+
+  test("dark and light are dark_name and light_name, else the siblings of name", () => {
+    expect(herdrPalette('[theme]\nname = "gruvbox"', "light", null)).toEqual(THEMES["gruvbox-light"]);
+    expect(herdrPalette('[theme]\nname = "gruvbox-light"', "dark", null)).toEqual(THEMES.gruvbox);
+    expect(herdrPalette('[theme]\nname = "gruvbox"\nlight_name = "rose-pine-dawn"', "light", null)).toEqual(THEMES["rose-pine-dawn"]);
+  });
+
+  test("an unknown name falls back to catppuccin, or catppuccin-latte for light", () => {
+    expect(herdrPalette('[theme]\nname = "nope"', "auto", null)).toEqual(THEMES.catppuccin);
+    expect(herdrPalette('[theme]\nlight_name = "nope"', "light", null)).toEqual(THEMES["catppuccin-latte"]);
+  });
+
+  test("[theme.custom] overrides slots, and the mode table goes last", () => {
+    const cfg = '[theme]\nname = "nord"\n[theme.custom]\naccent = "#f5c2e7"\nred = "LightRed"\ntext = "reset"\n[theme.custom.light]\naccent = "rgb(1, 2, 3)"';
+    const auto = herdrPalette(cfg, "auto", null);
+    expect([auto.accent, auto.red, auto.text, auto.green]).toEqual(["#f5c2e7", 9, null, THEMES.nord.green]);
+    expect(herdrPalette(cfg, "light", null).accent).toBe("#010203");
+  });
+
+  test("a custom value that herdr does not know is cyan", () => {
+    expect(herdrPalette('[theme.custom]\naccent = "chartreuse"', "auto", null).accent).toBe(6);
+  });
+
+  test("[ui] accent applies when [theme.custom] has no accent", () => {
+    expect(herdrPalette('[ui]\naccent = "#123"', "auto", null).accent).toBe("#112233");
+    expect(herdrPalette('[ui]\naccent = "cyan"', "auto", null).accent).toBe(THEMES.catppuccin.accent);
+    expect(herdrPalette('[ui]\naccent = "#123"\n[theme.custom]\naccent = "#456"', "auto", null).accent).toBe("#445566");
   });
 });
 
 describe("themeStyle", () => {
-  test("auto is the active theme, and nothing without one", () => {
-    expect(themeStyle("auto", herdr, colors)).toBe(themeCss(toml));
-    expect(themeStyle("auto", herdr, () => null)).toBe("");
+  test("takes the herdr colors first", () => {
+    const v = vars(themeStyle("auto", '[theme]\nname = "gruvbox"', darkTerm));
+    const g = THEMES.gruvbox;
+    expect(v).toMatchObject({
+      bg: g.panel_bg, fg: g.text, muted: g.overlay0, accent: g.accent, ok: g.green, warn: g.yellow, err: g.red,
+      "sel-bg": g.selection_bg, working: g.yellow, blocked: g.red, done: g.blue, idle: g.green,
+    });
   });
 
-  test("light is the light_name theme", () => {
-    expect(themeStyle("light", herdr, colors)).toBe(themeCss(light));
+  test("takes the ANSI colors from the terminal only", () => {
+    const v = vars(themeStyle("auto", null, darkTerm));
+    for (let i = 0; i < 16; i++) expect(v[`c${i}`]).toBe(ansi[i]);
+    expect(vars(themeStyle("auto", null, null)).c0).toBeUndefined();
   });
 
-  test("light is the built-in palette without a light_name theme, even with an active theme", () => {
-    const css = ":root:root { color-scheme: light; }";
-    expect(themeStyle("light", null, colors)).toBe(css);
-    expect(themeStyle("light", '[theme]\nlight_name = "missing"', colors)).toBe(css);
+  test("the terminal theme of herdr takes the terminal colors", () => {
+    const v = vars(themeStyle("auto", '[theme]\nname = "terminal"', darkTerm));
+    expect([v.bg, v.fg, v.accent, v.err, v.muted]).toEqual([darkTerm.bg, darkTerm.fg, ansi[4], ansi[9], ansi[7]]);
+    expect(v["sel-bg"]).toBeUndefined();
   });
 
-  test("dark is the dark_name theme, else the active theme, else the built-in palette", () => {
-    expect(themeStyle("dark", '[theme]\ndark_name = "gruvbox-light"', colors)).toBe(themeCss(light));
-    expect(themeStyle("dark", null, colors)).toBe(themeCss(toml));
-    expect(themeStyle("dark", '[theme]\ndark_name = "missing"', colors)).toBe(themeCss(toml));
-    expect(themeStyle("dark", null, () => null)).toBe(":root:root { color-scheme: dark; }");
+  test("without terminal colors, the terminal theme keeps the built-in colors of the page", () => {
+    expect(themeStyle("auto", '[theme]\nname = "terminal"', null)).toBe("");
+    expect(themeStyle("light", '[theme]\nname = "terminal"', null)).toBe(":root, :root:root { color-scheme: light; }");
   });
 
-  test("asks for the colors of the named theme only", () => {
-    const asked: (string | null)[] = [];
-    themeStyle("light", herdr, (n) => (asked.push(n), colors(n)));
-    expect(asked).toEqual(["gruvbox-light"]);
+  test("sets color-scheme from the background", () => {
+    expect(themeStyle("auto", '[theme]\nname = "gruvbox"', null)).toContain("color-scheme: dark;");
+    expect(themeStyle("light", '[theme]\nname = "gruvbox"', null)).toContain("color-scheme: light;");
+  });
+
+  test("only #rrggbb terminal values reach the CSS", () => {
+    const bad = { fg: "red; } body { x: y", bg: "#1d2021", ansi: ["#zzzzzz", 5] } as unknown as TerminalColors;
+    const css = themeStyle("auto", '[theme]\nname = "terminal"', bad);
+    expect(css.match(/[{}]/g)).toHaveLength(2);
+    expect(vars(css)).toEqual({ bg: "#1d2021" });
   });
 });
 
@@ -99,6 +103,6 @@ describe("parseTheme", () => {
 
   test("refuses another mode or key", () => {
     expect(() => parseTheme({ mode: "x" })).toThrow(/theme\.mode/);
-    expect(() => parseTheme({ nme: "x" })).toThrow(/unknown key theme\.nme/);
+    expect(() => parseTheme({ colors: "x" })).toThrow(/unknown key theme\.colors/);
   });
 });

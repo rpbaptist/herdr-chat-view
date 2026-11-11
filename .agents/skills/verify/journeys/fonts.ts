@@ -39,11 +39,7 @@ export default async function (j: Journey) {
       return ok(l) ? l : false;
     }) as Promise<Look>;
 
-  const omarchy = Bun.spawnSync(["omarchy", "font", "current"]);
-  const family = omarchy.exitCode === 0 ? omarchy.stdout.toString().trim() : "";
-  // Chromium serializes a single-word family without quotes.
-  const ser = (name: string) => (/^[A-Za-z][\w-]*$/.test(name) ? name : `"${name}"`);
-  const defaultMono = family ? `${ser(family)}, monospace` : "monospace";
+  const defaultMono = "monospace";
   const defaultSans = 'Inter, Geist, system-ui, -apple-system, "Segoe UI", sans-serif';
 
   try {
@@ -53,7 +49,7 @@ export default async function (j: Journey) {
     let l = await look();
     const want = { sans: defaultSans, size: "15px", mono: defaultMono, seg: "11.5px", pre: "13px", spinner: "15px" };
     if (JSON.stringify(l) !== JSON.stringify(want)) throw new Error(`default look ${JSON.stringify(l)} is not ${JSON.stringify(want)}`);
-    step(`no config: Omarchy font ${family || "(none)"}, sans stack, 15px text, 13px code: ${JSON.stringify(l)}`);
+    step(`no config: monospace, sans stack, 15px text, 13px code: ${JSON.stringify(l)}`);
     await j.shot("default");
 
     write('[font]\nsans = "Lato, Helvetica"\n');

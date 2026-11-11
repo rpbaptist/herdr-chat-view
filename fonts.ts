@@ -35,21 +35,12 @@ export function parseFont(font: Record<string, unknown>): FontConfig {
   return config;
 }
 
-// The family of `omarchy font current`, or none when the output is not a family name.
-export function omarchyFamily(output: string): string[] {
-  try {
-    return parseFamilies(output.trim(), "omarchy font");
-  } catch {
-    return [];
-  }
-}
-
 const quote = (name: string) => (GENERIC.has(name.toLowerCase()) ? name.toLowerCase() : `"${name}"`);
 const stack = (names: string[], last: string) => [...names.map(quote), ...(names.at(-1)?.toLowerCase() === last ? [] : [last])].join(", ");
 
-// `omarchy` is the default mono family. The stacks end in a generic family, so the fallback keeps working.
-export function fontCss(font: FontConfig, omarchy: string[] = []): string {
-  const mono = stack(font.mono ?? omarchy, "monospace");
+// The stacks end in a generic family, so the fallback keeps working.
+export function fontCss(font: FontConfig): string {
+  const mono = stack(font.mono ?? [], "monospace");
   const sans = font.sans === "terminal" ? mono : font.sans ? stack(font.sans, "sans-serif") : DEFAULT_SANS;
   return `:root, :root:root { --sans: ${sans}; --mono: ${mono}; --fs: ${font.size}px; --ms: ${font.monoSize}px; }`;
 }

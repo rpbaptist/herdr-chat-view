@@ -1,37 +1,29 @@
 // Feature: theme. The Auto / Dark / Light control in the top bar, and [theme] mode in config.toml.
 // Proves: click or key -> POST /api/config -> config.toml text (other content kept) -> settings and theme
 // events -> computed colors of every open page; a hand edit of the file; and a reload that keeps the choice.
-// The expected colors come from the real herdr config and Omarchy theme files, read here the way a user would find them.
+// The herdr config and the terminal colors file are fixtures in the run directory: herdr colors first, terminal colors second.
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Journey } from "../scripts/page.ts";
 
 const BUILTIN = { dark: "#262624", light: "#faf9f5" };
 const rgb = (hex: string) => `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
 const read = (path: string) => (existsSync(path) ? readFileSync(path, "utf8") : "");
-const bgOf = (colors: string) => /^\s*background\s*=\s*"(#[0-9a-fA-F]{6})"/m.exec(colors)?.[1] ?? null;
-
-function themeBg(name: string | null): string | null {
-  if (name === null) return bgOf(read(join(process.env.XDG_STATE_HOME ?? join(homedir(), ".local/state"), "omarchy/current/theme/colors.toml")));
-  const dir = Bun.spawnSync(["omarchy", "theme", "dir", name]).stdout.toString().trim();
-  return dir ? bgOf(read(join(dir, "colors.toml"))) : null;
-}
+const TERMINAL = { fg: "#d0d0d0", bg: "#101418", ansi: Array.from({ length: 16 }, (_, i) => `#20${(i * 16).toString(16).padStart(2, "0")}40`) };
 
 export default async function (j: Journey) {
   const { page, step, until, run } = j;
   const file = run.HERDR_CHAT_CONFIG;
   if (!file) throw new Error("run.env has no HERDR_CHAT_CONFIG; start the run with this checkout's up.sh");
-  const herdrConfig = Bun.TOML.parse(read(process.env.HERDR_CONFIG_PATH ?? join(homedir(), ".config/herdr/config.toml"))) as any;
-  const names = { dark: herdrConfig.theme?.dark_name as string | undefined, light: herdrConfig.theme?.light_name as string | undefined };
-  const active = themeBg(null);
-  const want = {
-    auto: active ?? null,
-    dark: (names.dark && themeBg(names.dark)) || active || BUILTIN.dark,
-    light: (names.light && themeBg(names.light)) || BUILTIN.light,
-  };
-  step(`expected backgrounds: ${JSON.stringify(want)} (herdr dark_name=${names.dark}, light_name=${names.light}, active=${active})`);
-  if (want.light === want.dark) throw new Error("this machine's themes give the same light and dark background; the journey cannot tell them apart");
+  const herdrFile = run.HERDR_CONFIG_PATH;
+  const colorsFile = join(run.STATE_DIR, "terminal-colors.json");
+  if (!herdrFile) throw new Error("run.env has no HERDR_CONFIG_PATH; start the run with this checkout's up.sh");
+  const { THEMES } = await import(join(run.CHECKOUT, "herdr-themes.ts"));
+  const paneColors = read(colorsFile);
+  step(`terminal colors from the chat pane query: ${paneColors || "(none: the headless herdr has no host terminal)"}`);
+  writeFileSync(herdrFile, '[theme]\nname = "gruvbox"\n');
+  const want = { auto: THEMES.gruvbox.panel_bg, dark: THEMES.gruvbox.panel_bg, light: THEMES["gruvbox-light"].panel_bg };
+  step(`herdr theme gruvbox; expected backgrounds: ${JSON.stringify(want)}`);
 
   const pressed = (p = page) => p.evaluate(() => [...document.querySelectorAll("#themesw button")].find((b) => b.getAttribute("aria-pressed") === "true")?.textContent);
   const bg = (p = page) => p.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -54,7 +46,7 @@ export default async function (j: Journey) {
     await second.goto(run.URL);
 
     await waitMode("Auto is marked, terminal colors", "Auto", want.auto);
-    if (want.auto) step(`auto: background ${await bg()} is the active Omarchy theme`);
+    step(`auto: background ${await bg()} is the panel_bg of the herdr theme`);
     await j.shot("auto");
 
     await page.locator('#themesw [data-mode="light"]').click();
@@ -112,7 +104,22 @@ export default async function (j: Journey) {
     if (!fileText().includes('mode = "light" # by hand')) throw new Error("a refused write changed the file");
     step(`refused writes: ${JSON.stringify(refused)}; the file is unchanged`);
 
-    // The built-in palettes, as an Omarchy install without the herdr themes gets them: one copy, picked by color-scheme.
+    // The terminal second: herdr's terminal theme takes the background and the ANSI colors from the terminal colors file.
+    writeFileSync(file, fileText().replace('mode = "light" # by hand', 'mode = "auto"'));
+    writeFileSync(colorsFile, JSON.stringify(TERMINAL));
+    writeFileSync(herdrFile, '[theme]\nname = "terminal"\n');
+    await waitMode("herdr terminal theme takes the terminal background", "Auto", TERMINAL.bg);
+    const c = await page.evaluate(() => [1, 9].map((i) => getComputedStyle(document.documentElement).getPropertyValue(`--c${i}`).trim()));
+    if (c[0] !== TERMINAL.ansi[1] || c[1] !== TERMINAL.ansi[9]) throw new Error(`ANSI colors are ${c}, want ${TERMINAL.ansi[1]} and ${TERMINAL.ansi[9]}`);
+    step(`herdr theme terminal: background ${await bg()}, --c1 ${c[0]}, --c9 ${c[1]} from the terminal colors file`);
+    await j.shot("terminal");
+
+    // A hand edit of the herdr theme shows with no reload.
+    writeFileSync(herdrFile, '[theme]\nname = "nord"\n');
+    await waitMode("herdr theme nord", "Auto", THEMES.nord.panel_bg);
+    step(`herdr theme nord: background ${await bg()}`);
+
+    // The built-in palettes, as a page without theme.css gets them: one copy, picked by color-scheme.
     await page.evaluate(() => document.getElementById("theme")!.remove());
     for (const scheme of ["light", "dark"] as const) {
       await page.evaluate((s) => (document.documentElement.style.colorScheme = s), scheme);
@@ -123,5 +130,8 @@ export default async function (j: Journey) {
     await second.close();
   } finally {
     rmSync(file, { force: true });
+    rmSync(herdrFile, { force: true });
+    if (paneColors) writeFileSync(colorsFile, paneColors);
+    else rmSync(colorsFile, { force: true });
   }
 }

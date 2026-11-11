@@ -9,5 +9,5 @@
 - **Settings popover**: the panel that the gear next to the status bar opens. It edits `[status]` in `config.toml`, one key per change.
 - **Dictation**: speech to text with a system tool (voxtype) that the microphone button starts and stops. The text goes into the draft. `[voice] tool` in `config.toml` selects the tool or turns it off.
 - **Send key**: the key that sends the composer text, `enter` or `ctrl-enter`. `[input] send_key` in `config.toml` sets it.
-- **Terminal font**: the mono font of the chat: code, status chips and the spinner. It is the Omarchy font unless `[font] mono` sets one. `sans = "terminal"` uses it for the text too.
-- **Theme mode**: `auto`, `dark` or `light`, one value for all chat panes. The control in the top bar and `[theme] mode` in `config.toml` set it. Auto shows the active Omarchy theme. Dark and light show the theme that `dark_name` and `light_name` in herdr's `[theme]` name.
+- **Terminal font**: the mono font of the chat: code, status chips and the spinner. It is `monospace` unless `[font] mono` sets one. `sans = "terminal"` uses it for the text too.
+- **Theme mode**: `auto`, `dark` or `light`, one value for all chat panes. The control in the top bar and `[theme] mode` in `config.toml` set it. Auto shows the herdr theme that herdr shows. Dark and light show the `dark_name` and `light_name` themes of herdr's `[theme]`. Colors that the herdr theme does not give come from the terminal.
