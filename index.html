@@ -17,6 +17,12 @@
   --shadow: 0 1px 2px color-mix(in srgb, black 8%, transparent), 0 6px 24px color-mix(in srgb, black 10%, transparent);
   --sans: "Inter", "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: monospace;
+  /* Agent state colors, as herdr's sidebar uses them: working yellow,
+     blocked red, done teal, idle green, unknown grey. */
+  --working: var(--c11, #d79921);
+  --blocked: var(--c9, var(--err));
+  --done: var(--c14, #5fa38a);
+  --idle: var(--c10, var(--ok));
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #262624; --fg: #ece9e1; --muted: #9c978a; --accent: #d97757; --ok: #5fc58a; --warn: #e0b04c; --err: #ef6b5f; }
@@ -38,10 +44,11 @@ header .sp { flex: 1; }
 .iconbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--soft); padding: 6px 10px; border-radius: 8px; }
 .iconbtn:hover { background: var(--raised); color: var(--fg); }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
-.dot.working { background: var(--fg); animation: pulse 1.2s infinite; }
-.dot.blocked { background: var(--warn); }
-.dot.done { background: var(--ok); }
-@keyframes pulse { 50% { opacity: .3; } }
+.dot.working { background: var(--working); }
+.dot.working.dim { opacity: .3; }
+.dot.blocked { background: var(--blocked); }
+.dot.done { background: var(--done); }
+.dot.idle { background: var(--idle); }
 
 /* conversation */
 #log { overflow-y: auto; scroll-behavior: auto; }
@@ -76,7 +83,7 @@ pre code { background: none; padding: 0; font-size: inherit; }
 .steps > summary::-webkit-details-marker { display: none; }
 .steps > summary:hover { color: var(--fg); background: var(--surface); }
 .steps > summary .label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.steps > summary .chev { transition: transform .15s; }
+
 .steps[open] > summary .chev { transform: rotate(90deg); }
 .steps[open] > summary { border-bottom: 1px solid var(--line); }
 .step { font-size: 13px; border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
@@ -89,21 +96,17 @@ pre code { background: none; padding: 0; font-size: inherit; }
 .step pre { margin: 0 14px 10px; max-height: 340px; overflow: auto; white-space: pre-wrap; word-break: break-all; font-size: 12px; }
 .st { width: 14px; height: 14px; display: inline-grid; place-items: center; flex: none; }
 .st.ok { color: var(--ok); } .st.err { color: var(--err); }
-.spin { width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--soft); border-radius: 50%; animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+/* No CSS animations: Chromium ticks them every frame, and pixel sends each
+   changed frame to the terminal as an image, which makes typing lag.
+   A timer in the script changes the spinners a few times per second. */
+.spin { font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--working); }
 
 /* working indicator */
 #working { display: none; align-items: center; gap: 10px; color: var(--muted); font-size: 14px; margin: 18px 0 0; }
 #working.on { display: flex; }
 /* Braille spinner, like herdr's agent panel; the same for every agent. */
-#working .spinner { font-family: var(--mono); color: var(--accent); font-size: 15px; line-height: 1; width: 1ch; }
-#working .spinner::before { content: "⣾"; animation: braille .8s steps(1) infinite; }
-@keyframes braille {
-  0% { content: "⣾"; } 12.5% { content: "⣽"; } 25% { content: "⣻"; } 37.5% { content: "⢿"; }
-  50% { content: "⡿"; } 62.5% { content: "⣟"; } 75% { content: "⣯"; } 87.5% { content: "⣷"; }
-}
-#working .shimmer { background: linear-gradient(90deg, var(--muted) 0%, var(--fg) 50%, var(--muted) 100%); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 2s linear infinite; }
-@keyframes shimmer { to { background-position: -200% 0; } }
+#working .spinner { font-family: var(--mono); color: var(--working); font-size: 15px; line-height: 1; width: 1ch; }
+#working .shimmer { color: var(--muted); }
 
 .empty { color: var(--muted); text-align: center; margin-top: 28vh; font-size: 14px; }
 #screen { white-space: pre; font-size: 12px; }
@@ -113,9 +116,9 @@ footer { padding: 0 24px 18px; }
 .dock { max-width: 760px; margin: 0 auto; position: relative; }
 #tobottom { position: absolute; top: -46px; left: 50%; transform: translateX(-50%); display: none; width: 32px; height: 32px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); box-shadow: var(--shadow); color: var(--soft); align-items: center; justify-content: center; }
 #tobottom.on { display: flex; }
-#blocked { display: none; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line)); background: color-mix(in srgb, var(--warn) 7%, var(--bg)); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; }
+#blocked { display: none; border: 1px solid color-mix(in srgb, var(--blocked) 55%, var(--line)); background: color-mix(in srgb, var(--blocked) 7%, var(--bg)); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; }
 #blocked.on { display: block; }
-#blocked .h { display: flex; align-items: center; gap: 8px; color: var(--warn); font-weight: 600; font-size: 13px; margin-bottom: 8px; }
+#blocked .h { display: flex; align-items: center; gap: 8px; color: var(--blocked); font-weight: 600; font-size: 13px; margin-bottom: 8px; }
 #blocked pre { max-height: 34vh; overflow: auto; margin: 0 0 10px; background: var(--bg); font-size: 12px; }
 .keys { display: flex; gap: 6px; flex-wrap: wrap; }
 .key { font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); }
@@ -502,6 +505,16 @@ document.addEventListener("keydown", (e) => {
   if (!e.defaultPrevented) blockedKey(e);
 });
 window.addEventListener("hashchange", () => { pane = decodeURIComponent(location.hash.slice(1)); connect(); });
+
+// Spinner frames, 8 per second, only while something spins.
+const FRAMES = "⣾⣽⣻⢿⡿⣟⣯⣷";
+let frame = 0;
+setInterval(() => {
+  if (!document.querySelector(".spin, #working.on, .dot.working")) return;
+  frame = (frame + 1) % FRAMES.length;
+  document.querySelectorAll(".spin, #working.on .spinner").forEach((el) => (el.textContent = FRAMES[frame]));
+  document.querySelectorAll(".dot.working").forEach((d) => d.classList.toggle("dim", frame >= 4));
+}, 125);
 
 connect();
 $("input").focus();
