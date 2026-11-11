@@ -43,13 +43,19 @@ description = "Chat view: toggle terminal / chat"
 
 An optional `config.toml` in the plugin config directory
 (`herdr plugin config-dir rpbaptist.herdr-chat-view`) controls the status bar
-under the message box and the send key. Without the file, the status bar shows
+under the message box, the send key and the fonts. Without the file, the status bar shows
 the agent's footer as it is, and Enter sends. The terms are in
 [GLOSSARY.md](GLOSSARY.md).
 
 ```toml
 [input]
 send_key = "enter"               # "enter" (default) or "ctrl-enter"
+
+[font]
+sans = "Inter, Helvetica"        # text font; "terminal" = use the mono font
+mono = "JetBrainsMono Nerd Font" # code and chip font; default: the Omarchy font
+size = 15                        # text size in px (8 to 40)
+mono_size = 13                   # code size in px (8 to 40)
 
 [status]
 mode = true                      # show the mode pill in the composer
@@ -74,6 +80,18 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
   auto-complete popup still takes Enter and Tab, and the answer keys for a
   blocked agent do not change.
 
+- `font.sans` (default `"Inter", "Geist", system-ui, ...`) sets the text font.
+  `"terminal"` uses the mono font, so the whole chat uses the terminal font.
+- `font.mono` (default the Omarchy font from `omarchy font current`, read when
+  the server starts; `monospace` when there is none) sets the font for code,
+  the status chips and the spinner. Both fonts take one family name or a comma
+  separated list. Names may have letters, digits, spaces and `. _ + -` only.
+  Each list ends in `sans-serif` or `monospace`, so Nerd Font glyphs still
+  show.
+- `font.size` (default `15`) and `font.mono_size` (default `13`) set the sizes
+  in px, from 8 to 40. All other text sizes scale with them. They are config
+  settings only, with no zoom key in the page.
+
 The server reads the file every 2 seconds, so open chat pages show a change
 with no restart. If the file has an error (including an unknown table or
 key), all settings use the defaults and the page shows the error in one line.
@@ -85,7 +103,7 @@ bun test
 ```
 
 Unit tests cover the transcript parsers, the screen readers, the config file,
-the status bar model and the theme.
+the status bar model, the theme and the fonts.
 The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 ## Files
@@ -100,6 +118,7 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | `branches.ts` | The git branch of a working directory, cached |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
 | `theme.ts` | Omarchy theme colors as CSS variables |
+| `fonts.ts` | Parses `[font]` and builds the font CSS variables |
 | `index.html` | The chat page |
 | `chat-pane.sh`, `chat-view.cjs` | Runs the page in the pane with pixel |
 

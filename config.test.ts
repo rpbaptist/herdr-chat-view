@@ -51,7 +51,18 @@ describe("loadConfig", () => {
   });
 
   test("reports an unknown table", () => {
-    expectDefaults("[font]\nsize = 3", /unknown table font \(use \[status\] or \[input\]\)/);
+    expectDefaults("[colors]\nbg = 3", /unknown table colors \(use \[status\] or \[input\] or \[font\]\)/);
+  });
+
+  test("reads [font] next to the other tables", () => {
+    const c = loadConfig('[font]\nsans = "terminal"\nsize = 16\n[input]\nsend_key = "ctrl-enter"');
+    expect(c.font).toEqual({ sans: "terminal", mono: null, size: 16, monoSize: 13 });
+    expect(c.input.sendKey).toBe("ctrl-enter");
+  });
+
+  test("reports a bad [font] value and uses the defaults", () => {
+    expectDefaults("[font]\nsize = 2", /font\.size must be a number from 8 to 40/);
+    expectDefaults('[status]\nmode = false\n[font]\nmono = "a;b"', /font\.mono: bad font name "a;b"/);
   });
 
   test("reports a key outside a table", () => {
