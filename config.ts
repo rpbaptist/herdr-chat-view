@@ -1,5 +1,6 @@
 // config.toml: one table per feature, one parser per table.
 import { parseStatus } from "./status.ts";
+import { parseFont } from "./fonts.ts";
 
 export type SendKey = "enter" | "ctrl-enter";
 export type InputConfig = { sendKey: SendKey };
@@ -19,7 +20,7 @@ function parseInput(input: Record<string, unknown>): InputConfig {
 }
 
 // A new table is one new entry here.
-const TABLES = { status: parseStatus, input: parseInput };
+const TABLES = { status: parseStatus, input: parseInput, font: parseFont };
 type Tables = { [K in keyof typeof TABLES]: ReturnType<(typeof TABLES)[K]> };
 export type Config = Tables & { error: string | null };
 

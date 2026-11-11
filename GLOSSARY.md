@@ -7,3 +7,4 @@
 - **Screen chip**: one segment of the footer lines other than the mode line. The footer splits into segments at wide gaps, or at spaces between color codes.
 - **Built-in item**: a chip from herdr agent data, not from the screen (`kind`, `cwd`, `status`, `branch`).
 - **Send key**: the key that sends the composer text, `enter` or `ctrl-enter`. `[input] send_key` in `config.toml` sets it.
+- **Terminal font**: the mono font of the chat: code, status chips and the spinner. It is the Omarchy font unless `[font] mono` sets one. `sans = "terminal"` uses it for the text too.

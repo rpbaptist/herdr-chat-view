@@ -10,6 +10,7 @@ import { inputText } from "./screen.ts";
 import { loadConfig, pageSettings } from "./config.ts";
 import { statusBar, usesBranch } from "./status.ts";
 import { themeCss } from "./theme.ts";
+import { fontCss, omarchyFamily } from "./fonts.ts";
 import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
 import { agentOf, transcriptPath } from "./agents.ts";
@@ -227,6 +228,17 @@ function readTheme(): string {
   }
 }
 
+// The Omarchy terminal font, read once at server start. Empty when omarchy is missing or fails.
+async function omarchyFont(): Promise<string[]> {
+  try {
+    const proc = Bun.spawn(["omarchy", "font", "current"], { stdout: "pipe", stderr: "ignore", stdin: "ignore", timeout: 1500 });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 ? omarchyFamily(out) : [];
+  } catch {
+    return [];
+  }
+}
+
 async function serve() {
   // Keep port and token across restarts, so open chat panes reconnect.
   const prev = readJson<ServerInfo | null>(serverFile, null);
@@ -236,9 +248,11 @@ async function serve() {
   let agents: Agent[] = [];
   let agentsJson = "";
   let lastActive = Date.now();
-  let theme = readTheme();
-  const configFile = await configPath();
+  const [configFile, omarchy] = await Promise.all([configPath(), omarchyFont()]);
   let config = readConfig(configFile);
+  // The terminal colors, and the fonts and sizes from config.toml.
+  const readStyle = () => `${readTheme()}\n${fontCss(loadConfig(config).font, omarchy)}`;
+  let theme = readStyle();
   // The page settings from config.toml, sent when a page connects and when a value changes.
   function sendSettings(c: Client) {
     const json = JSON.stringify(pageSettings(loadConfig(config)));
@@ -385,7 +399,7 @@ async function serve() {
   setInterval(() => {
     config = readConfig(configFile);
     for (const c of clients) sendSettings(c);
-    const next = readTheme();
+    const next = readStyle();
     if (next === theme) return;
     theme = next;
     for (const c of clients) c.send("theme", theme);
