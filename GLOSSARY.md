@@ -6,4 +6,5 @@
 - **Chip**: one item of the status bar. It is a *screen chip* or a *built-in item*.
 - **Screen chip**: one segment of the footer lines other than the mode line. The footer splits into segments at wide gaps, or at spaces between color codes.
 - **Built-in item**: a chip from herdr agent data, not from the screen (`kind`, `cwd`, `status`, `branch`).
+- **Dictation**: speech to text with a system tool (voxtype) that the microphone button starts and stops. The text goes into the draft. `[voice] tool` in `config.toml` selects the tool or turns it off.
 - **Send key**: the key that sends the composer text, `enter` or `ctrl-enter`. `[input] send_key` in `config.toml` sets it.

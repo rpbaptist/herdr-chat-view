@@ -38,3 +38,4 @@ Each feature file starts with an H1 title and one paragraph about the behavior t
 - [Agent controls and status](./agent-controls.md) covers the mode pill (Shift+Tab), the footer status segments, interrupt, and the blocked-answer panel.
 - [Auto-complete](./autocomplete.md) covers the `/` and `$` popup for skills and built-in commands. Journey: `journeys/autocomplete.ts`. Status: proven.
 - [Send key](./send-key.md) covers `[input] send_key` in `config.toml`: Enter or Ctrl+Enter sends, the tooltip, the popup keys, config errors, and live reload. Journey: `journeys/send-key.ts`. Status: proven.
+- [Voice dictation](./voice.md) covers the microphone button: record, transcribe, the text in the message box, Esc to cancel, tool errors, and `[voice] tool = "off"`, against a fake voxtype. Journey: `journeys/voice.ts`. Status: proven with the fake tool; real speech is not covered.

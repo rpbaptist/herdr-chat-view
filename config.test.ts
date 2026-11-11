@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { loadConfig, pageSettings } from "./config.ts";
 
+const which = (bin: string) => (bin === "voxtype" ? "/usr/bin/voxtype" : null);
+const settings = (text: string | null) => pageSettings(loadConfig(text), which);
+
 describe("loadConfig", () => {
   test("gives the defaults when the file is missing", () => {
     const c = loadConfig(null);
     expect(c.error).toBeNull();
     expect(c.input).toEqual({ sendKey: "enter" });
     expect(c.status.mode).toBe(true);
-    expect(pageSettings(c)).toEqual({ sendKey: "enter" });
+    expect(pageSettings(c, which)).toEqual({ sendKey: "enter", voice: { tool: "voxtype" } });
   });
 
   test("gives the defaults for an empty file", () => {
@@ -15,8 +18,14 @@ describe("loadConfig", () => {
   });
 
   test("reads send_key from [input]", () => {
-    expect(pageSettings(loadConfig('[input]\nsend_key = "ctrl-enter"'))).toEqual({ sendKey: "ctrl-enter" });
-    expect(pageSettings(loadConfig('[input]\nsend_key = "enter"'))).toEqual({ sendKey: "enter" });
+    expect(settings('[input]\nsend_key = "ctrl-enter"').sendKey).toBe("ctrl-enter");
+    expect(settings('[input]\nsend_key = "enter"').sendKey).toBe("enter");
+  });
+
+  test("reads tool from [voice]", () => {
+    expect(settings('[voice]\ntool = "off"').voice).toBeNull();
+    expect(settings('[voice]\ntool = "voxtype"').voice).toEqual({ tool: "voxtype" });
+    expect(pageSettings(loadConfig(null), () => null).voice).toEqual({ tool: null, reason: expect.stringMatching(/voxtype/) });
   });
 
   test("reads the tables independently", () => {
@@ -42,6 +51,10 @@ describe("loadConfig", () => {
     expectDefaults("[input]\nsend_key = true", /input\.send_key/);
   });
 
+  test("reports a bad [voice] tool and uses the defaults", () => {
+    expectDefaults('[voice]\ntool = "monologue"', /voice\.tool must be/);
+  });
+
   test("reports an unknown key in [input]", () => {
     expectDefaults('[input]\nsendkey = "enter"', /unknown key input\.sendkey/);
   });
@@ -51,7 +64,7 @@ describe("loadConfig", () => {
   });
 
   test("reports an unknown table", () => {
-    expectDefaults("[font]\nsize = 3", /unknown table font \(use \[status\] or \[input\]\)/);
+    expectDefaults("[font]\nsize = 3", /unknown table font \(use \[status\] or \[input\] or \[voice\]\)/);
   });
 
   test("reports a key outside a table", () => {

@@ -1,10 +1,11 @@
 // config.toml: one table per feature, one parser per table.
 import { parseStatus } from "./status.ts";
+import { parseVoice, voiceSettings, type VoiceSettings } from "./voice.ts";
 
 export type SendKey = "enter" | "ctrl-enter";
 export type InputConfig = { sendKey: SendKey };
 // What the server sends to each page, apart from the status bar.
-export type Settings = { sendKey: SendKey };
+export type Settings = { sendKey: SendKey; voice: VoiceSettings };
 
 const SEND_KEYS: SendKey[] = ["enter", "ctrl-enter"];
 
@@ -19,7 +20,7 @@ function parseInput(input: Record<string, unknown>): InputConfig {
 }
 
 // A new table is one new entry here.
-const TABLES = { status: parseStatus, input: parseInput };
+const TABLES = { status: parseStatus, input: parseInput, voice: parseVoice };
 type Tables = { [K in keyof typeof TABLES]: ReturnType<(typeof TABLES)[K]> };
 export type Config = Tables & { error: string | null };
 
@@ -42,7 +43,9 @@ function parseTables(toml: Record<string, unknown>): Tables {
 
 const DEFAULTS = parseTables({});
 
-export const pageSettings = (config: Config): Settings => ({ sendKey: config.input.sendKey });
+// which finds a program on PATH; the server passes Bun.which.
+export const pageSettings = (config: Config, which: (bin: string) => string | null): Settings =>
+  ({ sendKey: config.input.sendKey, voice: voiceSettings(config.voice, which) });
 
 // The last config text and its result: the server resolves the config every second.
 let cache: { text: string | null; config: Config } | null = null;

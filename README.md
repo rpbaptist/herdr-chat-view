@@ -12,6 +12,8 @@ next to its terminal. It is for local use only. It is not a herdr replacement.
 - Shift+Tab cycles the agent's mode, Esc interrupts. The agent's status line
   shows under the message box. An optional config file controls it.
 - A draft moves with you: from the chat into Claude's input box, and back.
+- A microphone button dictates into the message box with
+  [voxtype](https://voxtype.io). The audio stays on the machine.
 
 Status: in daily use by the author, not yet published.
 
@@ -43,13 +45,17 @@ description = "Chat view: toggle terminal / chat"
 
 An optional `config.toml` in the plugin config directory
 (`herdr plugin config-dir rpbaptist.herdr-chat-view`) controls the status bar
-under the message box and the send key. Without the file, the status bar shows
-the agent's footer as it is, and Enter sends. The terms are in
+under the message box, the send key and dictation. Without the file, the status
+bar shows the agent's footer as it is, Enter sends, and the microphone button
+uses voxtype when it is on `PATH`. The terms are in
 [GLOSSARY.md](GLOSSARY.md).
 
 ```toml
 [input]
 send_key = "enter"               # "enter" (default) or "ctrl-enter"
+
+[voice]
+tool = "auto"                    # "auto" (default), "voxtype" or "off"
 
 [status]
 mode = true                      # show the mode pill in the composer
@@ -74,6 +80,26 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
   auto-complete popup still takes Enter and Tab, and the answer keys for a
   blocked agent do not change.
 
+- `voice.tool` (default `"auto"`) sets the dictation tool. `"auto"` uses
+  voxtype when it is on `PATH`. Without it, the button is disabled and its
+  tooltip says why. `"off"` hides the button.
+
+## Dictation
+
+Click the microphone button to start, and click it again to stop. The button
+is red while voxtype records, and shows a spinner while it transcribes. Then
+the text comes after the draft in the message box. Esc cancels the dictation
+while it runs; at other times Esc interrupts the agent, as before.
+
+The server runs `voxtype record start --file=<file>`, `record stop`,
+`record cancel` and `voxtype status`. voxtype records and transcribes on this
+machine with its own model and settings, and writes the text to a file in the
+plugin's private runtime directory. The server reads the file, deletes it, and
+adds the text to the draft. The page never gets audio and needs no microphone
+permission, and no key goes to the focused window. The voxtype daemon must run
+(`systemctl --user status voxtype`). One dictation runs at a time; another chat
+page shows the button disabled until it ends.
+
 The server reads the file every 2 seconds, so open chat pages show a change
 with no restart. If the file has an error (including an unknown table or
 key), all settings use the defaults and the page shows the error in one line.
@@ -85,7 +111,7 @@ bun test
 ```
 
 Unit tests cover the transcript parsers, the screen readers, the config file,
-the status bar model and the theme.
+the status bar model, the dictation tool descriptor and the theme.
 The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 ## Files
@@ -99,6 +125,7 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | `config.ts` | Parses `config.toml`: one table, one parser |
 | `branches.ts` | The git branch of a working directory, cached |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
+| `voice.ts` | Dictation: one descriptor per tool (commands, status, result file), and one dictation from start to text |
 | `theme.ts` | Omarchy theme colors as CSS variables |
 | `index.html` | The chat page |
 | `chat-pane.sh`, `chat-view.cjs` | Runs the page in the pane with pixel |
