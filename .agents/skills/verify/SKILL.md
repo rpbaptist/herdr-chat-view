@@ -66,7 +66,7 @@ A journey is a TypeScript file that exports `default async (j: Journey) => {}`. 
 - `j.transcript()` returns the parsed transcript lines.
 - `j.until(what, fn)` polls until `fn` returns a true value.
 
-Use these page handles: `#input` (composer), `#send`, `#stop`, `#mode` (mode pill, `.ml` holds the label), `#term` (the "Terminal" button), `#items .msg.user`, `#items .msg.assistant`, `#items .msg.note`, `#items details.steps` (tool-call group), `#status .seg` (footer segments), `#blocked` (`.on` when the agent asks a question), `#hchip` (agent status text), `#err` (error line), `#complete` (auto-complete popup, `.on` when open; entries are `.opt`, the selected one `.opt.on`, the name in `.nm`).
+Use these page handles: `#input` (composer), `#send`, `#stop`, `#mode` (mode pill, `.ml` holds the label), `#term` (the "Terminal" button), `#items .msg.user`, `#items .msg.assistant`, `#items .msg.note`, `#items details.steps` (tool-call group), `#status .seg` (footer segments), `#blocked` (`.on` when the agent asks a question), `#hchip` (agent status text), `#err` (error line), `#complete` (auto-complete popup, `.on` when open; entries are `.opt`, the selected one `.opt.on`, the name in `.nm`), `#gear` (opens the status bar settings popover), `#settings` (the popover; its controls have a stable `data-id`, for example `mode`, `items:new`, `hide:0`, `items:1:up`, `add:kind`, `close`), `#mic` (dictation button, `.on` when shown, `.rec` while recording, `.busy` while transcribing).
 
 The fixture agent (`scripts/fixture-agent.ts`) does these things:
 
@@ -75,6 +75,7 @@ The fixture agent (`scripts/fixture-agent.ts`) does these things:
 - On its screen it shows `last: <text>` and `mode: <n>`.
 - Shift+Tab cycles the mode line: none, then `accept edits on`, then `plan mode on`.
 - Esc clears the input box.
+- Its footer shows `fixture-agent · verify`, `⎇ main` and `42% context`. The message `context <n>` changes the last chip to `<n>% context`.
 
 The shipped journeys are in `journeys/`. Each feature file in `features/` lists its recipe and its proof. Start at [features/README.md](features/README.md).
 
@@ -115,5 +116,6 @@ It keeps `<run-dir>`. Do not kill processes by name: `pixel`, `bun` and `herdr-c
 - **Detection delay.** The idle state comes from the screen, so it takes 1–3 s after a redraw.
 - **Hard-coded transcript path.** `transcripts.ts` reads Claude transcripts from `~/.claude/projects` only. It ignores `CLAUDE_CONFIG_DIR`. The fixture writes there for this reason.
 - **No blocked or working state.** The fixture cannot enter `working` or `blocked`. Journeys that need these states (the blocked answer panel, the stop button, the "Working…" indicator) must report that the precondition is missing. Alternatively, extend the fixture. Do not weaken the journey.
+- **Fake dictation tool.** `up.sh` gives the server a fake voxtype (`<run-dir>/voxtype/voxtype`, from `scripts/fake-voxtype.sh`) through `HERDR_CHAT_VOICE_BIN`. A verify run never records from the microphone, and it cannot prove real speech to text.
 - **Expected console line.** `console.log` always has one line `Failed to load resource ... 403`. It is the browser's `/favicon.ico` request, which has no token. Ignore this line. Report any other line.
 - **Server idle exit.** The server exits after 10 minutes with no open page. If a run idles longer, run `doctor.sh`. It shows `/health` FAIL. Then run `down.sh` and `up.sh` again.

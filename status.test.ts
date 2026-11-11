@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { statusBar, type StatusAgent } from "./status.ts";
+import { loadConfig } from "./config.ts";
+import { hideRegex, statusBar, usesBranch, type StatusAgent } from "./status.ts";
 
 const rule = (n = 40) => "─".repeat(n);
 const screen = (...lines: string[]) => lines.join("\n");
 const agent: StatusAgent = { agent: "claude", agent_status: "idle", cwd: "/home/me/code/app" };
 const HOME = "/home/me";
-const bar = (s: string, config: string | null = null, a: StatusAgent | null = agent) => statusBar(s, a, config, HOME);
+const bar = (s: string, config: string | null = null, a: StatusAgent | null = agent) => statusBar(s, a, loadConfig(config), HOME);
 const texts = (s: string, config: string | null = null, a: StatusAgent | null = agent) => bar(s, config, a).chips.map((c) => c.text);
 
 const claude = screen(
@@ -20,9 +21,9 @@ describe("statusBar without config", () => {
     const b = bar(claude);
     expect(b.mode).toEqual({ label: "Accept edits", extra: "2 files", color: 141 });
     expect(b.chips).toEqual([
-      { type: "screen", ansi: "\x1b[2mOpus 4.7", text: "Opus 4.7" },
-      { type: "screen", ansi: "\x1b[33m⎇ main\x1b[0m", text: "⎇ main" },
-      { type: "screen", ansi: "42% context", text: "42% context" },
+      { type: "screen", ansi: "\x1b[2mOpus 4.7", text: "Opus 4.7", hide: "/^Opus \\d+\\.\\d+$/" },
+      { type: "screen", ansi: "\x1b[33m⎇ main\x1b[0m", text: "⎇ main", hide: "/^⎇ main$/" },
+      { type: "screen", ansi: "42% context", text: "42% context", hide: "/^\\d+% context$/" },
     ]);
     expect(b.error).toBeNull();
   });
@@ -93,10 +94,24 @@ describe("statusBar built-in items", () => {
   test("shows the agent kind, cwd and status where items lists them", () => {
     expect(bar(claude, items('"kind", "/^⎇/", "cwd", "status"')).chips).toEqual([
       { type: "builtin", name: "kind", text: "claude" },
-      { type: "screen", ansi: "\x1b[33m⎇ main\x1b[0m", text: "⎇ main" },
+      { type: "screen", ansi: "\x1b[33m⎇ main\x1b[0m", text: "⎇ main", hide: "/^⎇ main$/" },
       { type: "builtin", name: "cwd", text: "~/code/app" },
       { type: "builtin", name: "status", text: "idle" },
     ]);
+  });
+
+  test("shows the branch from the agent data, and no chip when it is empty", () => {
+    expect(texts(claude, items('"branch"'), { ...agent, branch: "feat/x" })).toEqual(["feat/x"]);
+    expect(texts(claude, items('"branch"'), { ...agent, branch: "" })).toEqual([]);
+    expect(texts(claude, items('"branch"'))).toEqual([]);
+  });
+
+  test("usesBranch is true only when items lists branch", () => {
+    const uses = (text: string | null) => usesBranch(loadConfig(text).status);
+    expect(uses(null)).toBe(false);
+    expect(uses(items('"kind", "*"'))).toBe(false);
+    expect(uses(items('"kind", "branch"'))).toBe(true);
+    expect(uses("[status]\nitems = [\"nope\"]")).toBe(false);
   });
 
   test("uses the foreground cwd before the cwd", () => {
@@ -157,5 +172,28 @@ describe("statusBar config errors", () => {
   test("clears the error when the config is correct again", () => {
     expect(bar(claude, '[status]\nitems = ["brnch"]').error).not.toBeNull();
     expect(bar(claude, '[status]\nitems = ["kind"]')).toEqual({ mode: defaults.mode, chips: [{ type: "builtin", name: "kind", text: "claude" }], error: null });
+  });
+});
+
+describe("hideRegex", () => {
+  const hides = (chip: string, text: string) => loadConfig(`[status]\nhide = [${JSON.stringify(hideRegex(chip))}]`).status.hide[0].test(text);
+
+  test("matches the whole chip text, with any number in place of each number", () => {
+    expect(hideRegex("42% context")).toBe("/^\\d+% context$/");
+    expect(hides("42% context", "42% context")).toBe(true);
+    expect(hides("42% context", "7% context")).toBe(true);
+    expect(hides("42% context", "42% context left")).toBe(false);
+    expect(hides("42% context", "% context")).toBe(false);
+  });
+
+  test("escapes regex characters, so they match as text", () => {
+    expect(hideRegex("$1.50 (est.) [a|b] *x+? ^{c}\\")).toBe("/^\\$\\d+\\.\\d+ \\(est\\.\\) \\[a\\|b\\] \\*x\\+\\? \\^\\{c\\}\\\\$/");
+    expect(hides("$1.50 (est.) [a|b] *x+? ^{c}\\", "$12.05 (est.) [a|b] *x+? ^{c}\\")).toBe(true);
+    expect(hides("v1.2", "v1x2")).toBe(false);
+  });
+
+  test("keeps a slash and other text as it is", () => {
+    expect(hideRegex("~/code/app · main")).toBe("/^~/code/app · main$/");
+    expect(hides("~/code/app · main", "~/code/app · main")).toBe(true);
   });
 });

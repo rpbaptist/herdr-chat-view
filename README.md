@@ -15,6 +15,8 @@ next to its terminal. It is for local use only. It is not a herdr replacement.
 - Shift+Tab cycles the agent's mode, Esc interrupts. The agent's status line
   shows under the message box. An optional config file controls it.
 - A draft moves with you: from the chat into Claude's input box, and back.
+- A microphone button dictates into the message box with
+  [voxtype](https://voxtype.io). The audio stays on the machine.
 
 Status: in daily use by the author, not yet published.
 
@@ -46,10 +48,27 @@ description = "Chat view: toggle terminal / chat"
 
 An optional `config.toml` in the plugin config directory
 (`herdr plugin config-dir rpbaptist.herdr-chat-view`) controls the status bar
-under the message box. Without the file, the status bar shows the agent's
-footer as it is. The terms are in [GLOSSARY.md](GLOSSARY.md).
+under the message box, the send key, the fonts, the theme and dictation. Without the file, the status
+bar shows the agent's footer as it is, Enter sends, and the microphone button
+uses voxtype when it is on `PATH`. The terms are in
+[GLOSSARY.md](GLOSSARY.md).
 
 ```toml
+[input]
+send_key = "enter"               # "enter" (default) or "ctrl-enter"
+
+[theme]
+mode = "auto"                    # "auto" (default), "dark" or "light"
+
+[font]
+sans = "Inter, Helvetica"        # text font; "terminal" = use the mono font
+mono = "JetBrainsMono Nerd Font" # code and chip font; default: the Omarchy font
+size = 15                        # text size in px (8 to 40)
+mono_size = 13                   # code size in px (8 to 40)
+
+[voice]
+tool = "auto"                    # "auto" (default), "voxtype" or "off"
+
 [status]
 mode = true                      # show the mode pill in the composer
 hide = ["/\\d+% context/"]       # regexes on plain chip text; screen chips only; runs first
@@ -62,12 +81,76 @@ items = ["kind", "/^⎇/", "*"]    # order: built-in name | "/regex/flags" | "*"
 - `items` (default `["*"]`) sets the order. A regex places all the screen
   chips that match and are not placed yet. `"*"` places all the other screen
   chips. A list without `"*"` shows only the listed items. The built-in items
-  are `kind` (agent kind), `cwd` (the working directory, with `~` for home)
-  and `status` (the herdr agent status, in the state color).
+  are `kind` (agent kind), `cwd` (the working directory, with `~` for home),
+  `status` (the herdr agent status, in the state color) and `branch` (the git
+  branch of the agent's working directory; no chip outside a git repository or
+  on a detached HEAD). The server runs git only when `items` lists `branch`.
+
+- The gear at the right of the status bar opens the **settings popover**. It
+  edits `[status]` in the same file: the mode pill, the `items` (add a built-in
+  item, `"*"` or a regex; move an item up or down; remove it) and the `hide`
+  regexes (add, edit, remove). A chip button under "Hide a chip that shows now"
+  adds a `hide` regex for that chip: its whole text, escaped, with each number
+  as `\d+`, so `42% context` stays hidden at 43%. Each change writes the file at
+  once with the same text edit as the theme control, and the status bar shows
+  it. The page refuses a value that gives a config error (for example a bad
+  regex), shows the error under the field and keeps your text. When the file
+  already has an error, the popover shows it and does not write. Esc or a click
+  outside closes the popover, and the focus goes back to the message box.
+
+- `input.send_key` (default `"enter"`) sets the key that sends the message. With
+  `"ctrl-enter"`, Enter and Shift+Enter add a new line, and Ctrl+Enter or
+  Cmd+Enter sends. The send button tooltip shows the active key. The
+  auto-complete popup still takes Enter and Tab, and the answer keys for a
+  blocked agent do not change.
+
+- `theme.mode` (default `"auto"`) sets the colors. The control at the top right
+  of the page (Auto, Dark, Light) writes it, and so does a hand edit; every open
+  page follows. `auto` shows the active Omarchy theme, as the terminal does. It
+  does not follow the light or dark setting of the host. `dark` shows the Omarchy
+  theme that `dark_name` names in the `[theme]` table of herdr's `config.toml`,
+  else the active theme, else the built-in dark colors. `light` shows the theme
+  that `light_name` names, else the built-in light colors. Themes are found as
+  `omarchy theme dir` finds them. herdr's config and the theme files are only
+  read, every 2 seconds. The page control writes the file with a text edit that
+  keeps all other text and comments, and refuses a value that gives a config
+  error.
+
+- `font.sans` (default `"Inter", "Geist", system-ui, ...`) sets the text font.
+  `"terminal"` uses the mono font, so the whole chat uses the terminal font.
+- `font.mono` (default the Omarchy font from `omarchy font current`, read when
+  the server starts; `monospace` when there is none) sets the font for code,
+  the status chips and the spinner. Both fonts take one family name or a comma
+  separated list. Names may have letters, digits, spaces and `. _ + -` only.
+  Each list ends in `sans-serif` or `monospace`, so Nerd Font glyphs still
+  show.
+- `font.size` (default `15`) and `font.mono_size` (default `13`) set the sizes
+  in px, from 8 to 40. All other text sizes scale with them. They are config
+  settings only, with no zoom key in the page.
+
+- `voice.tool` (default `"auto"`) sets the dictation tool. `"auto"` uses
+  voxtype when it is on `PATH`. Without it, the button is disabled and its
+  tooltip says why. `"off"` hides the button.
+
+## Dictation
+
+Click the microphone button to start, and click it again to stop. The button
+is red while voxtype records, and shows a spinner while it transcribes. Then
+the text comes after the draft in the message box. Esc cancels the dictation
+while it runs; at other times Esc interrupts the agent, as before.
+
+The server runs `voxtype record start --file=<file>`, `record stop`,
+`record cancel` and `voxtype status`. voxtype records and transcribes on this
+machine with its own model and settings, and writes the text to a file in the
+plugin's private runtime directory. The server reads the file, deletes it, and
+adds the text to the draft. The page never gets audio and needs no microphone
+permission, and no key goes to the focused window. The voxtype daemon must run
+(`systemctl --user status voxtype`). One dictation runs at a time; another chat
+page shows the button disabled until it ends.
 
 The server reads the file every 2 seconds, so open chat pages show a change
-with no restart. If the file has an error, the status bar uses the defaults
-and the page shows the error in one line.
+with no restart. If the file has an error (including an unknown table or
+key), all settings use the defaults and the page shows the error in one line.
 
 ## Tests
 
@@ -75,8 +158,9 @@ and the page shows the error in one line.
 bun test
 ```
 
-Unit tests cover the transcript parsers, the screen readers, the status bar
-model and the theme.
+Unit tests cover the transcript parsers, the screen readers, the config file,
+the config text editor, the status bar model, the theme, the fonts and the
+dictation tool descriptor.
 The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 
 ## Files
@@ -84,10 +168,16 @@ The `verify` skill in `.claude/skills/verify` drives the plugin end to end.
 | File | Purpose |
 | --- | --- |
 | `herdr-chat.ts` | `toggle` and `close` actions, the `restore` startup hook, and the local chat server |
-| `transcripts.ts` | Claude Code and Codex transcript parsers |
+| `transcripts.ts` | Claude Code and Codex transcript and skill-list parsers |
+| `agents.ts` | One descriptor for each agent kind: parsers, transcript lookup, skill trigger, built-in commands |
 | `screen.ts` | Reads Claude's input box and footer from the agent screen |
+| `config.ts` | Parses `config.toml`: one table, one parser; checks an edit before it is written |
+| `config-edit.ts` | Sets one key in `config.toml` text and keeps the rest of the file |
+| `branches.ts` | The git branch of a working directory, cached |
 | `status.ts` | The status bar model: the footer, filtered and ordered by `config.toml` |
-| `theme.ts` | Omarchy theme colors as CSS variables |
+| `voice.ts` | Dictation: one descriptor per tool (commands, status, result file), and one dictation from start to text |
+| `theme.ts` | Parses `[theme]`, picks the theme for the mode, and turns its colors into CSS variables |
+| `fonts.ts` | Parses `[font]` and builds the font CSS variables |
 | `index.html` | The chat page |
 | `chat-pane.sh`, `chat-view.cjs` | Runs the page in the pane with pixel |
 

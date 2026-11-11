@@ -4,14 +4,19 @@
 //   bun herdr-chat.ts close    close the chat pane of the focused agent
 //   bun herdr-chat.ts restore  startup hook: clean up chat panes that a herdr restart left behind
 //   bun herdr-chat.ts serve    run the local chat server (started by toggle)
-import { mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { inputText } from "./screen.ts";
-import { statusBar } from "./status.ts";
-import { themeCss } from "./theme.ts";
+import { loadConfig, pageSettings, updateConfig } from "./config.ts";
+import { statusBar, usesBranch } from "./status.ts";
+import { themeStyle } from "./theme.ts";
+import { fontCss, omarchyFamily } from "./fonts.ts";
+import { branchCache } from "./branches.ts";
 import { completions } from "./completions.ts";
-import { addSkills, parsers, skillParsers, transcriptPath, type Item, type Skill } from "./transcripts.ts";
+import { agentOf, transcriptPath } from "./agents.ts";
+import { addSkills, type Item, type Skill } from "./transcripts.ts";
+import { appendText, startDictation, TOOLS, type Dictation, type Exec } from "./voice.ts";
 
 const PLUGIN_ID = "rpbaptist.herdr-chat-view";
 const IDLE_EXIT_MS = 10 * 60_000;
@@ -243,16 +248,25 @@ type Client = {
   offset: number;
   seq: number;
   status?: string;
+  settings?: string;
   skills: Map<string, Skill>;
 };
 
-// The status bar config. HERDR_CHAT_CONFIG overrides the path, so a test run does not touch the user's file.
+// The plugin config. HERDR_CHAT_CONFIG overrides the path, so a test run does not touch the user's file.
 // null when herdr cannot give the plugin config directory: the status bar then uses the defaults.
 async function configPath(): Promise<string | null> {
   if (process.env.HERDR_CHAT_CONFIG) return process.env.HERDR_CHAT_CONFIG;
   const dir = String(await herdr(["plugin", "config-dir", PLUGIN_ID]).catch(() => "")).trim();
   return dir ? join(dir, "config.toml") : null;
 }
+
+// HERDR_CHAT_VOICE_BIN replaces the dictation tool, so a test run uses a fake tool and no microphone.
+const which = (bin: string) => process.env.HERDR_CHAT_VOICE_BIN || Bun.which(bin);
+const exec: Exec = async (argv) => {
+  const proc = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+  const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+  return { out, err, code };
+};
 
 // The config text, or null when the file is missing.
 function readConfig(path: string | null): string | null {
@@ -264,11 +278,40 @@ function readConfig(path: string | null): string | null {
   }
 }
 
-function readTheme(): string {
+// Read-only: the herdr config, and the colors.toml of an Omarchy theme. A null name is the active theme.
+// The theme directory is where `omarchy theme dir` looks: the user's copy first.
+const herdrConfigFile = process.env.HERDR_CONFIG_PATH ?? join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "herdr/config.toml");
+const readText = (path: string): string | null => {
   try {
-    return themeCss(readFileSync(themeFile, "utf8"));
+    return readFileSync(path, "utf8");
   } catch {
-    return "";
+    return null;
+  }
+};
+function themeColors(name: string | null): string | null {
+  if (name === null) return readText(themeFile);
+  const user = join(homedir(), ".config/omarchy/themes", name);
+  return readText(join(existsSync(user) ? user : join(process.env.OMARCHY_PATH ?? "/usr/share/omarchy", "themes", name), "colors.toml"));
+}
+
+// The config file text changed to set one key. The text is checked before it is written, and written in one step.
+function writeConfigKey(path: string, table: string, key: string, value: unknown): string {
+  const text = updateConfig(readConfig(path), table, key, value as never);
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, text);
+  renameSync(tmp, path);
+  return text;
+}
+
+// The Omarchy terminal font, read once at server start. Empty when omarchy is missing or fails.
+async function omarchyFont(): Promise<string[]> {
+  try {
+    const proc = Bun.spawn(["omarchy", "font", "current"], { stdout: "pipe", stderr: "ignore", stdin: "ignore", timeout: 1500 });
+    const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    return code === 0 ? omarchyFamily(out) : [];
+  } catch {
+    return [];
   }
 }
 
@@ -281,9 +324,21 @@ async function serve() {
   let agents: Agent[] = [];
   let agentsJson = "";
   let lastActive = Date.now();
-  let theme = readTheme();
-  const configFile = await configPath();
+  const [configFile, omarchy] = await Promise.all([configPath(), omarchyFont()]);
   let config = readConfig(configFile);
+  // The terminal colors, and the fonts and sizes from config.toml.
+  const readStyle = () => {
+    const { theme, font } = loadConfig(config);
+    return `${themeStyle(theme.mode, readText(herdrConfigFile), themeColors)}\n${fontCss(font, omarchy)}`;
+  };
+  let theme = readStyle();
+  // The page settings from config.toml, sent when a page connects and when a value changes.
+  function sendSettings(c: Client) {
+    const json = JSON.stringify(pageSettings(loadConfig(config), which));
+    if (json === c.settings) return;
+    c.settings = json;
+    c.send("settings", JSON.parse(json));
+  }
   const drafts = new Map<string, string>();
   function setDraft(pane: string, text: string) {
     drafts.set(pane, text);
@@ -320,6 +375,51 @@ async function serve() {
 
   const agentFor = (pane: string) => agents.find((a) => a.pane_id === pane);
 
+  // Dictation: one at a time, as the system tool records for the whole machine.
+  // Every page shows its state; only the page that started it gets the text.
+  let dictation: Dictation | null = null;
+  let starting = false;
+  const voiceEvent = (): { state: string; pane: string | null; error?: string } => ({ state: dictation?.state ?? "idle", pane: dictation?.pane ?? null });
+  const sendVoice = (data = voiceEvent()) => { for (const c of clients) c.send("voice", data); };
+  async function voice(pane: string, action: string) {
+    if (action === "start") {
+      if (dictation || starting) throw new Error("dictation already runs");
+      const v = pageSettings(loadConfig(config), which).voice;
+      if (!v?.tool) throw new Error(v?.reason ?? "dictation is off");
+      starting = true;
+      try {
+        dictation = await startDictation(v.tool, which(TOOLS[v.tool].bin)!, exec, join(stateDir, `voice-${Date.now()}.txt`), pane);
+      } finally {
+        starting = false;
+      }
+    } else if (action === "stop") await dictation?.stop();
+    else if (action === "cancel") {
+      const d = dictation;
+      dictation = null;
+      await d?.cancel();
+    } else throw new Error(`unknown voice action ${action}`);
+    sendVoice();
+  }
+  let polling = false;
+  async function pollVoice() {
+    const d = dictation;
+    if (!d || polling) return;
+    polling = true;
+    const before = d.state;
+    try {
+      const text = await d.poll();
+      if (dictation !== d) return;
+      if (text) setDraft(d.pane, appendText(drafts.get(d.pane) ?? "", text));
+      if (text !== null) dictation = null;
+      if (text !== null || d.state !== before) sendVoice();
+    } catch (e) {
+      if (dictation === d) dictation = null;
+      sendVoice({ ...voiceEvent(), pane: d.pane, error: (e as Error).message });
+    } finally {
+      polling = false;
+    }
+  }
+
   // Keep each chat pane named after its agent's current title.
   const labels = new Map<string, string>();
   function syncLabels() {
@@ -354,29 +454,29 @@ async function serve() {
   async function pump(c: Client) {
     const a = agentFor(c.pane);
     const session = a?.agent_session?.value;
+    const agent = agentOf(a?.agent);
     const key = `${a?.agent}/${session}`;
     if (key !== c.session) {
       c.session = key;
       c.offset = 0;
       c.seq = 0;
-      c.path = a && session && parsers[a.agent] ? await transcriptPath(a.agent, session) : null;
-      c.send("reset", { kind: a?.agent ?? null, transcript: !!c.path, parsed: !!(a && parsers[a.agent]) });
+      c.path = a && session && agent ? await transcriptPath(a.agent, session) : null;
+      c.send("reset", { kind: a?.agent ?? null, transcript: !!c.path, parsed: !!(a && agent) });
       c.skills = new Map();
       c.send("completions", completions(a?.agent, []));
     }
     // A new session writes its transcript only after the first message.
-    if (!c.path && a && session && parsers[a.agent]) {
+    if (!c.path && a && session && agent) {
       c.path = await transcriptPath(a.agent, session);
       if (c.path) c.send("reset", { kind: a.agent, transcript: true, parsed: true });
     }
-    if (!c.path || !a) return;
+    if (!c.path || !a || !agent) return;
     const file = Bun.file(c.path);
     if (file.size <= c.offset) return;
     const bytes = new Uint8Array(await file.slice(c.offset).arrayBuffer());
     const end = bytes.lastIndexOf(10);
     if (end < 0) return;
     c.offset += end + 1;
-    const parse = parsers[a.agent];
     const lines: unknown[] = [];
     const items: Item[] = [];
     for (const text of new TextDecoder().decode(bytes.subarray(0, end)).split("\n")) {
@@ -384,14 +484,16 @@ async function serve() {
       try {
         const line = JSON.parse(text);
         lines.push(line);
-        items.push(...parse(line, c.seq++));
+        items.push(...agent.parse(line, c.seq++));
       } catch {}
     }
     if (items.length) c.send("items", items);
-    if (addSkills(c.skills, skillParsers[a.agent]?.(lines) ?? [])) c.send("completions", completions(a.agent, c.skills.values()));
+    if (addSkills(c.skills, agent.parseSkills(lines))) c.send("completions", completions(a.agent, c.skills.values()));
   }
 
+  const branches = branchCache();
   setInterval(pollAgents, 1000);
+  setInterval(pollVoice, 500);
   setInterval(() => {
     for (const c of clients) pump(c).catch((e) => console.error("pump:", e));
     if (clients.size) lastActive = Date.now();
@@ -406,7 +508,11 @@ async function serve() {
       herdr(["agent", "read", c.pane, "--source", "visible", "--format", "ansi"])
         .then((screen) => {
           // A config change gives a new model here, so the page gets it on the next tick.
-          const json = JSON.stringify(statusBar(String(screen), agentFor(c.pane) ?? null, config, homedir()));
+          const a = agentFor(c.pane);
+          const cwd = a?.foreground_cwd || a?.cwd;
+          const cfg = loadConfig(config);
+          const withBranch = a && cwd && usesBranch(cfg.status) ? { ...a, branch: branches.get(cwd) } : a;
+          const json = JSON.stringify(statusBar(String(screen), withBranch ?? null, cfg, homedir()));
           if (json === c.status) return;
           c.status = json;
           c.send("status", JSON.parse(json));
@@ -414,12 +520,17 @@ async function serve() {
         .catch(() => {});
     }
   }, 1000);
-  setInterval(() => {
-    config = readConfig(configFile);
-    const next = readTheme();
+  // Send the settings and the style that the current config and themes give.
+  function syncPages() {
+    for (const c of clients) sendSettings(c);
+    const next = readStyle();
     if (next === theme) return;
     theme = next;
     for (const c of clients) c.send("theme", theme);
+  }
+  setInterval(() => {
+    config = readConfig(configFile);
+    syncPages();
   }, 2000);
   await pollAgents();
 
@@ -467,6 +578,8 @@ async function serve() {
               clients.add(client);
               client.send("agents", JSON.parse(agentsJson || "[]"));
               client.send("draft", drafts.get(pane) ?? "");
+              sendSettings(client);
+              client.send("voice", voiceEvent());
               pump(client).catch(() => {});
             },
             cancel() {
@@ -502,9 +615,26 @@ async function serve() {
           } catch (e) {
             return fail(e);
           }
+        case "POST /api/voice":
+          try {
+            await voice(pane, String(body.action));
+            return ok();
+          } catch (e) {
+            sendVoice();
+            return fail(e);
+          }
         case "POST /api/view":
           try {
             await (body.view === "terminal" ? toTerminal(pane) : toChat(pane));
+            return ok();
+          } catch (e) {
+            return fail(e);
+          }
+        case "POST /api/config":
+          try {
+            if (!configFile) throw new Error("no config file path");
+            config = writeConfigKey(configFile, String(body.table), String(body.key), body.value);
+            syncPages();
             return ok();
           } catch (e) {
             return fail(e);

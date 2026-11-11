@@ -1,35 +1,41 @@
 // The status bar model: the footer of the agent screen, filtered and ordered by config.toml.
 import { footer, type Mode, type ScreenChip } from "./screen.ts";
 
-export type StatusAgent = { agent: string; agent_status: string; cwd?: string; foreground_cwd?: string };
+export type StatusAgent = { agent: string; agent_status: string; cwd?: string; foreground_cwd?: string; branch?: string };
 // A chip from herdr agent data, not from the screen.
 export type BuiltinChip = { type: "builtin"; name: Builtin; text: string };
-export type Chip = ScreenChip | BuiltinChip;
+// A screen chip carries the hide regex that the settings popover adds for it.
+export type Chip = (ScreenChip & { hide: string }) | BuiltinChip;
 export type StatusBar = { mode: Mode | null; chips: Chip[]; error: string | null };
 
 const BUILTINS = {
   kind: (a: StatusAgent) => a.agent,
   cwd: (a: StatusAgent, home: string) => tilde(a.foreground_cwd || a.cwd || "", home),
   status: (a: StatusAgent) => a.agent_status,
+  branch: (a: StatusAgent) => a.branch ?? "",
 };
 type Builtin = keyof typeof BUILTINS;
+export const BUILTIN_NAMES = Object.keys(BUILTINS) as Builtin[];
 const isBuiltin = (s: string): s is Builtin => Object.hasOwn(BUILTINS, s);
 
 const tilde = (path: string, home: string) => (path === home || path.startsWith(home + "/") ? "~" + path.slice(home.length) : path);
 
 type StatusItem = { builtin: Builtin } | { regex: RegExp } | "*";
-type Config = { mode: boolean; hide: RegExp[]; items: StatusItem[] };
+// source keeps the hide and items strings as written, for the settings popover.
+export type StatusConfig = { mode: boolean; hide: RegExp[]; items: StatusItem[]; source: { hide: string[]; items: string[] } };
+// The [status] table as the page edits it.
+export type StatusSettings = { mode: boolean; hide: string[]; items: string[]; builtins: string[] };
 
-const DEFAULTS: Config = { mode: true, hide: [], items: ["*"] };
+const DEFAULTS: StatusConfig = { mode: true, hide: [], items: ["*"], source: { hide: [], items: ["*"] } };
 
-export function statusBar(screen: string, agent: StatusAgent | null, configText: string | null, home: string): StatusBar {
-  const { config, error } = loadConfig(configText);
+// The error is the config.toml error line of any table: the status bar shows it.
+export function statusBar(screen: string, agent: StatusAgent | null, { status: config, error }: { status: StatusConfig; error: string | null }, home: string): StatusBar {
   const { mode, chips } = footer(screen);
   const shown = chips.filter((c) => !config.hide.some((r) => r.test(c.text)));
   const placed = new Set<ScreenChip>();
   const out: Chip[] = [];
   const place = (keep: (c: ScreenChip) => boolean) => {
-    for (const c of shown) if (!placed.has(c) && keep(c)) placed.add(c), out.push(c);
+    for (const c of shown) if (!placed.has(c) && keep(c)) placed.add(c), out.push({ ...c, hide: hideRegex(c.text) });
   };
   for (const item of config.items) {
     if (item === "*") place(() => true);
@@ -42,44 +48,34 @@ export function statusBar(screen: string, agent: StatusAgent | null, configText:
   return { mode: config.mode ? mode : null, chips: out, error };
 }
 
-// The last config text and its result: the server resolves the status bar every second.
-let cache: { text: string | null; result: { config: Config; error: string | null } } | null = null;
+// True when the config lists the branch item, so the server runs git only then.
+export const usesBranch = (config: StatusConfig) => config.items.some((i) => typeof i === "object" && "builtin" in i && i.builtin === "branch");
 
-function loadConfig(text: string | null): { config: Config; error: string | null } {
-  if (cache?.text !== text) {
-    let result: { config: Config; error: string | null };
-    try {
-      result = { config: text === null ? DEFAULTS : parseConfig(text), error: null };
-    } catch (e) {
-      result = { config: DEFAULTS, error: `config.toml: ${(e as Error).message.split("\n")[0]}` };
-    }
-    cache = { text, result };
-  }
-  return cache.result;
-}
+export const statusSettings = ({ mode, source }: StatusConfig): StatusSettings => ({ mode, ...source, builtins: BUILTIN_NAMES });
 
-function parseConfig(text: string): Config {
-  const { status = {}, ...rest } = Bun.TOML.parse(text) as Record<string, unknown>;
-  const other = Object.keys(rest)[0];
-  if (other) throw new Error(`unknown key ${other} (put the settings in [status])`);
-  if (!isTable(status)) throw new Error("status must be a table");
-  const config = { ...DEFAULTS };
+const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// The hide regex for one chip: its whole text, with each run of digits as \d+, so "42% context" stays hidden at 43%.
+export const hideRegex = (text: string) => `/^${text.split(/\d+/).map(escapeRegex).join("\\d+")}$/`;
+
+// The [status] table of config.toml.
+export function parseStatus(status: Record<string, unknown>): StatusConfig {
+  const config = { ...DEFAULTS, source: { ...DEFAULTS.source } };
   for (const [key, value] of Object.entries(status)) {
     if (key === "mode") {
       if (typeof value !== "boolean") throw new Error("status.mode must be true or false");
       config.mode = value;
     } else if (key === "hide") {
-      config.hide = stringList(key, value).map((s, i) => parseRegex(`status.hide[${i}]`, s));
+      config.source.hide = stringList(key, value);
+      config.hide = config.source.hide.map((s, i) => parseRegex(`status.hide[${i}]`, s));
     } else if (key === "items") {
-      config.items = stringList(key, value).map((s, i) => parseItem(`status.items[${i}]`, s));
+      config.source.items = stringList(key, value);
+      config.items = config.source.items.map((s, i) => parseItem(`status.items[${i}]`, s));
     } else {
       throw new Error(`unknown key status.${key}`);
     }
   }
   return config;
 }
-
-const isTable = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
 function stringList(key: string, value: unknown): string[] {
   if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) throw new Error(`status.${key} must be a list of strings`);
